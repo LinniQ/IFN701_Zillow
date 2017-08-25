@@ -1,0 +1,254 @@
+ ---
+title: "IFN701: Zillow's Home Value Prediction (Zestimate) --- Round 1 Logerrow Prediction"
+author: "Linni, QIN n9632981"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Introduction
+
+This R markdown file is going to find out the logerror of Zestimate in Oct. Nov. Dec. of both 2016 and 2017, which is associated to 3millions of properties in three counties in California, USA (LA, OR, VA). Logerror is the difference between the Zestimate's preicted market value and the actual sales price of the particular property. 
+
+(Note: Detail introcution can be referred to Project Proposal)
+
+Official data from Kaggle:
+train_2016_v2.csv contatins the logerror of around 90thounds of properties sold within three specific counties through 2016.
+properties_2016.csv includes the total 3millions of properties within three specific counties with common 57 attributes such as room numbers, square footage and locations.
+
+Outcome:
+1. data analysis report: find out the valuable data from the collected samples
+eg.
+    the pattern of the sales
+    the pattern of the error distribution
+    the strongest factors to influcence the home value
+    
+2. Prediction model
+eg.
+    used to predict the logerror based on the available logerror data
+
+Prolem solving Methods:
+
+...
+
+
+# Import the available data
+
+```{r,fig.width=10, fig.height=7}
+
+train16 <- read.csv("./train_2016_v2.csv", header = TRUE) # "fread()" is a function to read large file and creat the table faster and more convenient.
+prop16 <- read.csv("./properties_2016.csv", header = TRUE)
+```
+
+
+## 1. Data Analysis
+
+
+First of all, let's explore the Error rate, Transaction pattern and Logerror Distribution.
+
+
+```{r}
+# convert the date into the name of the month for further visulation analysis
+train16$month <- months(as.Date(train16$transactiondate, format = "%d/%m/%y"))
+head(train16)
+
+```
+
+# 1.1 The accuracy of Zestimate (https://www.zillow.com/zestimate/) 
+
+    "Zillow's accuracy has a median error rate of 5%." 
+    
+    Is the median error value cloaser to their offical error rate?
+    0.006 = 0.6% ?
+
+```{r}
+library(plyr)
+
+summarise(train16, Median=median(train16$logerror), Mean= mean(train16$logerror), Max=max(train16$logerror), Min=min(train16$logerror), Std=sd(train16$logerror)) 
+
+```
+
+
+# 1.2 Transaction pattern of Zillow in 2016.
+
+```{r}
+
+tempA <- ddply(train16, .(month), "nrow") 
+names(tempA)[2] <- c("transactionnumber")
+tempA$month <- ordered(tempA$month, levels = c("December","November","October","September", "August", "July","June", "May", "April", "March",   "February","January" ))
+
+library(ggplot2)
+ggplot(tempA) + geom_bar(aes(x= month, y=transactionnumber), fill = "pink", stat = "identity") + xlab("Months") + ylab("Transaction Number of Properties on Zillow (2016)")+ scale_y_continuous(limits = c(0, 11500), breaks = seq(0, 11500, 1000)) + geom_hline(yintercept = mean(tempA$transactionnumber),linetype = "dashed", size = 2, color = "brown") + coord_flip() + theme_bw()
+```
+
+The brown dashed line is the mean of the transaction volume of Zillow in 2016. It can be learned from the diagram below it was a cold market from October to December. Their volume is far below the mean of the total number.  
+
+# 1.3 Logerror Distribution pattern of Zillow in 2016
+
+1.3.1 Distribution of Logerror
+
+Try jitter plot & box plot.
+
+```{r,fig.width=10, fig.height=7}
+
+train16[which(train16$logerror== max(train16$logerror)),] # to determine the range of scale
+train16[which(train16$logerror== min(train16$logerror)),]
+
+train16$month <- ordered(train16$month, levels = c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October","November", "December"))
+
+ggplot(train16) + geom_jitter(aes(x=month, y=logerror), stat = "identity", color = "brown") + xlab ("Months (2016)") + ylab("Logerror Distribution") + scale_y_continuous(limits = c(-5, 5), breaks = seq(-5, 5, 0.25)) + geom_hline(yintercept = 0 ,linetype = "dashed", size = 2, color = "black")+ theme_bw()
+
+
+```
+
+
+The jitter/box plot cannot tell us the significant different of the logerror distribution among the months. 
+
+
+Try the histogram/freqpoly plot. 
+
+```{r,fig.width=10, fig.height=7}
+
+ggplot(train16, aes(logerror,fill = month)) + geom_histogram(bins = 50) + xlab ("Monthly Logerror Distribution of Zillow (2016)") + ylab("Count") + scale_y_continuous(limits = c(0, 7000), breaks = seq(0, 7000, 700)) + scale_x_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5,0.5,0.05))+ theme_bw()
+
+# It looks better. It seems Zestimate has high accuracy through the whole year.
+
+```
+
+
+1.3.2 Monthly Change of Logerror by denoting median error rate
+
+```{r,fig.width=10, fig.height=7}
+
+tempB <- ddply(train16, c("month"), summarise, median = median(logerror))
+tempB$month <- ordered(tempB$month, levels = c("January", "February", "March","April","May", "June", "July","August","September",  "October","November", "December"))
+
+# coef(lm(median ~ month, data = tempB ))
+
+ggplot(tempB, aes(x=month, y=median, group=1)) + geom_point(color="brown", size=5) + geom_line(color="brown", size=1.5) + xlab ("Montly Change of the Logerror on Zillow (2016)") + ylab("Logerror") + scale_y_continuous(limits = c(0, 0.015), breaks = seq(0, 0.015, 0.0015)) + geom_smooth(method = "lm", se = FALSE, size = 2, color = "blue") + theme_bw()
+
+```
+
+There were high logerror among January, February, September, October, November and December of 2016. The ones in last four months are highest.
+A considerably increase of the accurancy is perofrmed starting from March when also it denotes the highest acccuracy of prediction druing 2016. Then the accuracy declined lightly until September.
+
+Cause:
+Transaction volume ?
+Maybe not. 
+In January, February and September of 2016, their transaction volume was more than triple times of the one in last quarter (Oct.Nov.Dec.). 
+
+According to Zillow, the accuracy of Zestimate depands on the available data supplied by the homeowners. So, does that mean:
+January, February, September, October, November and December of 2016 = less property data?
+March, April, May, June, July and August of 2016 = enough property data?
+
+
+
+# 1.4  Coorelations between the estimated value and the home attributes 
+
+
+# 1.4.1 Join property data and train data
+
+```{r}
+install.packages("dplyr")
+
+library(dplyr)
+joinid <- semi_join(prop16, train16, by = "parcelid") # There are 90150 properties in the total sample are sold in 2016,
+
+
+mergeid <- merge (x=train16, y=joinid, by = "parcelid", all.y = TRUE) # wierd????why doesnot the shape show 90150,61 but 90275,61. The other 125 properties should not contain the attributes values theoritically. 
+
+antij <- anti_join(x = train16, y= joinid, by = "parcelid", all.x=TRUE) # why (0,4), it should be (125,x)..Cannot find the way to produce  90150 + 61v to improve the accuracy of the merge file. Will try if needed later.
+
+```
+
+
+
+
+# 1.5 Relationships between the terror and home attributes
+
+
+
+
+
+
+
+
+
+
+# 2.0 Prediction Model
+
+
+```{r}
+install.packages("forecast")
+library(forecast)
+
+train16_ts <- subset(train16, select = - c(transactiondate)) # delect the transactiondate that might affect the ts convertation
+
+
+meanf(ts(train16))
+```
+
+
+
+
+
+
+# Others:
+
+As indicated above, the accuracy of Zestimate depands on the available data about the property and its location. Separate the individual month and county for training practice.
+
+```{r}
+
+oct16 <- subset(mergeid, month == "October", select = -transactiondate)
+nov16 <- subset(mergeid, month== "November", select = -transactiondate)
+dec16 <- subset(mergeid, month =="December", select = -transactiondate)
+
+LA <- subset(oct16, fips == "6037") #Los Angeles County
+OR <- subset(oct16, fips == "6059") # Ornage County
+VE <- subset(oct16, fips == "6111") #Ventura County
+
+```
+
+
+
+```{r}
+
+
+#   https://www.r-statistics.com/tag/aggregate/
+```
+
+
+## Other manipulation on the data
+
+
+```{r,fig.width=10, fig.height=7}
+
+
+library(ggmap)
+CA <- get_map(location = "california", zoom = 6, scale = "auto", color = "bw", maptype = c("terrain"))
+ggmap(CA)
+
+```
+
+# Zestimate predicts more accuracy on which kind of parcelid
+
+```{r}
+train16[,2] <- abs(train16$logerror)
+library(ggplot2)
+ggplot(train16, aes(logerror)) + geom_histogram(bins = 50) + scale_x_continuous(limits = c(0, 1), breaks = seq(0,1,0.002))+ theme_bw()
+tempC <- subset(train16, logerror < "0.05")
+
+```
+
+```{r}
+install.packages("party")
+library(party)
+formula <- regionidzip ~ parcelid + fips + regionidcity + regionidcounty
+ctreeA <- ctree(formula, data = prop16)# not allowed with missiong values
+```
+
+
+```{r}
+
+
+```
