@@ -177,15 +177,30 @@ antij <- anti_join(x = train16, y= joinid, by = "parcelid", all.x=TRUE) # why (0
 
 # 2.0 Prediction Model
 
+# 2.1 Split the train16 into two parts:
+
+trainning data (from January to September)
+test data (from October to December)
+
 
 ```{r}
+
+train16_train <- subset(train16, month == "January" | month=="February"| month=="March" | month=="April"| month=="May"| month=="June" | month=="July"| month == "August"| month =="September")
+
+
+
+train16_test <- subset(train16, month == "October" | month=="November"| month=="December")
+
+
 install.packages("forecast")
 library(forecast)
 
-train16_ts <- subset(train16, select = - c(transactiondate)) # delect the transactiondate that might affect the ts convertation
+arma_fit <- auto.arima(train16_train) # NOT WORK. what is univariate time series?
 
 
-meanf(ts(train16))
+
+
+
 ```
 
 
