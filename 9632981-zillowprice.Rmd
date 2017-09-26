@@ -30,8 +30,8 @@ joinid: merging train16 and prop16 (90150 intersection parceldid with their 57 f
 
 mergeid: merging joinid and train16 (90275 parcelid with their 57 features and logerro, transactiondate, month)
 tempM: missing data counts(58 features and their counter !na)
-  tempM1: containing 32 features that missing data less than unitcnt(58353)
-    tempM2: among tempM1, there are 19 features containing data for all 90275 parcelid
+  tempM1: containing 32 features that missing data less than unitcnt(58353) (feature range for extended data exploartion)
+    tempM2: among tempM1, there are 19 features containing data for all 90275 parcelid (correlation needed equal value frequency)
       tempM2df: extract the useful features based on exploring tempM2 from mergeid
           LA: LA1(transaction count) LA2(montly logerror mean) LA3 (LA1+LA2)
           OR:
@@ -65,15 +65,23 @@ Prolem solving Methods:
 # Call the useful packages
 
 ```{r}
-install.packages("ggplot2")
 library(ggplot2)
+
 library(plyr)
 
 #install.packages("dplyr")
 library(dplyr)
 
-#install.packages("corrplot")
+install.packages("corrplot")
 library(corrplot)
+
+library(ggmap)
+
+# for decision tree prediciton
+install.packages("party")
+install.packages("caret")
+library(party)
+library(caret)
 
 ```
 
@@ -115,7 +123,6 @@ head(train16)
 
 ```{r}
 
-
 summarise(train16, Median=median(train16$logerror), Mean= mean(train16$logerror), Max=max(train16$logerror), Min=min(train16$logerror), Std=sd(train16$logerror)) 
 
 ```
@@ -139,13 +146,6 @@ The brown dashed line is the mean of the transaction time of Zillow in 2016. It 
 
 1.3.1 Distribution of Logerror
 
-
-```{r,fig.width=10}
-
-train16[which(train16$logerror== max(train16$logerror)),] # to determine the range of scale for later plotting
-train16[which(train16$logerror== min(train16$logerror)),]
-
-```
 
 ```{r,fig.width=10, fig.height=7}
 
@@ -205,25 +205,36 @@ Let's combine prop16 and train16 by parcelid. The result file will tell us the p
 
 # 1.4.1 Join property data and train data
 
-```{r,fig.width=10, fig.height=7}
-
+```{r,fig.width=10, fig.height=10}
 
 mergeid <- merge (x=train16, y=prop16, by = "parcelid", all.x = TRUE)
 
-mergeid <- arrange(mergeid, month) # if descending: arrange(mergeid, desc(month))
-
 mergeidA <- select_if(mergeid,is.numeric) # correlationship is calculated with numeric value only
 A <- cor(mergeidA) 
-
-
-```
-
-```{r,fig.width=10, fig.height=10}
-
 corrplot(A, method="circle")
 
 ```
 
+if it needs to replace the name of months into numeric
+```{r,fig.width=10, fig.height=10}
+
+mergeid["month"] = "January" <- 1 
+mergeid["month"] = "February" <- 2
+mergeid["month"] = "March" <- 3
+mergeid["month"] = "April" <- 4
+mergeid["month"] = "May" <- 5
+mergeid["month"] = "June" <- 6
+mergeid["month"] = "July" <- 7
+mergeid["month"] = "August" <- 8
+mergeid["month"] = "September" <- 9
+mergeid["month"] = "October" <- 10
+mergeid["month"] = "November" <- 11
+mergeid["month"] = "December" <- 12
+
+
+```
+
+The reason to caused the above question make is that there are missing value among different features. They are not equally filled with data. We need to explore the missing value and find the suitbale field to check their correlationships.
 
 
 # 1.4.2 check the missing data for each field
@@ -254,7 +265,7 @@ As we can see, from the top to unicnt, there are 29 (near 50%) property features
 
 Let us narrow down the size of the dataset and focus on figuring out the relationship between the estimate error and the feature variables with full values.
 
-# 1.4.3 Clean the data of joinid (90150 sold parcelids), out = mertempF2df
+# 1.4.3 Clean the data of joinid (90150 sold parcelids), out = tempF2dfn and correlationships between logerror and comparable 10 features
 
 ```{r}
 tempM1 <- subset(tempM,tempM > 58353) 
@@ -267,28 +278,47 @@ There are 32 features that contain nealy full values matching 90275 sold parceli
 
 tempM2 <- subset(tempM,tempM == 90275) 
 nrow(tempM2) #19, including parcelid
+View(tempM2)
 ```
 
 There are 19 features that contain 90275 values matching 90275 sold parcelid, including parcelid. They are listed in tempM2. As latitude and longtitude are not necessary for this project, becuase we don't need to scope to the parcelid located in detail streets. Let us extract the data with other 19 fields with 90275 parcelid to explore firstly. 
 
 With reference to the forum information supplied from Andrew Martin (Data Scientist at Zillow), https://www.kaggle.com/c/zillow-prize-1/discussion/34168, there are some duplicate data in the train16. Be careful to use it for calculation.
 
+```{r,fig.width=10, fig.height=7}
+
+tempM2df <- select(mergeid, parcelid, logerror,transactiondate, month, bathroomcnt, bedroomcnt, fips, hashottuborspa,latitude, longitude,  propertycountylandusecode, propertylandusetypeid, propertyzoningdesc, rawcensustractandblock, regionidcounty, roomcnt,  fireplaceflag, assessmentyear, taxdelinquencyflag)
+
+tempM2dfn <- select_if(tempM2df, is.numeric)
+colnames(tempM2dfn) #12 feature (19-7) transactiondate, month,propertycountylandusecode,propertyzoningdesc,fireplaceflag, taxdelinquencyflag
+B <- cor(tempM2dfn)
+corrplot(B, method="circle")
+
+```
 ```{r}
 
-tempM2df <- select(mergeid, "parcelid", "logerror","transactiondate", "month", "bathroomcnt", "bedroomcnt", "roomcnt", "fips", "hashottuborspa", "propertycountylandusecode", "propertylandusetypeid", "propertyzoningdesc", "rawcensustractandblock", "regionidcounty", "taxdelinquencyflag") 
+ddply(tempM2dfn, .(assessmentyear), "nrow")
 
 ```
 
-After exploring, I found that:
-"hashottuborspa" and "taxdelinquencyflag" were not actually filled fully, but little. They don't meet the dataset narrow down policy mentioned above. Delete them.
-"propertyzoningdesc" is "Description of the allowed land uses (zoning) for that property". It is also not filled fully. It is similar to "propertylandusetypeid" that is " Type of land use the property is zoned for". Delete "propertyzoningdesc".
-"propertycountylandusecode" sounds similar to "propertylandusetypeid" and it has no more identification about its code in the dictionary. Delete it.
+```{r,fig.width=7, fig.height=5}
+
+tempM2dfn <- tempM2dfn[,!(colnames(tempM2dfn) == "assessmentyear")]
+colnames(tempM2dfn) #11 feature , delete "assessmentyear""
+C <- cor(tempM2dfn)
+corrplot(C, method="circle")
+
+```
+
+So, what we can learn from these two sections 1.3 and 1.4 is that logerror and transaction frequancy have negative correlation. However, it is difficult to see any correlationship between logerror and other features.
+
+# Duplicated data
 
 ```{r}
 
-ddply(tempM2df, .(fips), "nrow")
+ddply(tempM2dfn, .(fips), "nrow")
 
-ddply(tempM2df, .(regionidcounty), "nrow") 
+ddply(tempM2dfn, .(regionidcounty), "nrow") 
 
 ```
 
@@ -298,77 +328,264 @@ fips = "6059", regionidcounty = "1286", Orange County
 fips = "6111", regionidcounty = "2061", Ventura County
 
 Therefore, delete "regionidcounty".
+```{r}
+
+tempM2dfn <- tempM2dfn[,!(colnames(tempM2dfn) == "regionidcounty")]
+colnames(tempM2dfn) #10 feature , delete "regionidcounty""
+
+```
+# explore bathroomcnt (out: During 2016, the most popular parcelid is with 2 bathrooms, then 3 and 1)
+```{r}
+
+bath <-data.frame(ddply(tempM2dfn, .(bathroomcnt), "nrow"))
+bath <- arrange(bath, desc(nrow))
+print(bath)
+
+ggplot(bath) + geom_bar(aes(x= bathroomcnt, y=nrow), fill = "pink", stat = "identity") + xlab("Bath Room Number") + ylab("Frequency")+ scale_y_continuous(limits = c(0, 37000), breaks = seq(0, 37000, 1000)) + scale_x_continuous(limits = c(-0.5, 12), breaks = seq(-0.5, 12, 0.5)) + theme_bw()
+
+```
+
+
+
+# explore bedroomcnt (out: During 2016, the most popular parcelid is with 3 bedrooms, then with 2 and 4 bedrooms)
+```{r}
+
+bed <-data.frame(ddply(tempM2dfn, .(bedroomcnt), "nrow"))
+bed <- arrange(bed, desc(nrow))
+print(bed)
+
+ggplot(bed) + geom_bar(aes(x= bedroomcnt, y=nrow), fill = "pink", stat = "identity") + xlab("Bed Room Number") + ylab("Frequency")+ scale_y_continuous(limits = c(0, 36000), breaks = seq(0, 36000, 1000)) + scale_x_continuous(limits = c(-1, 15), breaks = seq(-1, 15, 1)) + theme_bw()
+
+```
+
+
+
+# explore propertylandusetypeid (out: the most popular property type id is 261 - Single Family Residential)
+# (then 266 - Condominium) 
+```{r}
+
+pt <-data.frame(ddply(tempM2dfn, .(propertylandusetypeid), "nrow"))
+pt <- arrange(pt, desc(nrow))
+print(pt)
+
+```
+
+# explore fips (out: the most popular property is located in 6037 - LA, then 6059 - OR, last 6111 - VE)
+```{r}
+
+fips <-data.frame(ddply(tempM2dfn, .(fips), "nrow"))
+fips <- arrange(fips, desc(nrow))
+print(fips)
+
+```
+
+
+# explore room number (out: the most popular property is with 0 room - maybe the value is not supplied, then with 6 rooms and 7 rooms)
+```{r}
+
+room <-data.frame(ddply(tempM2dfn, .(roomcnt), "nrow"))
+room <- arrange(room, desc(nrow))
+print(room)
+
+```
+
+
+# Explore other features with data frequency between 58353 and 90275
+
+# explore taxvaluedollarcnt = landtaxvaluedollarcnt + structuretaxvaluedollarcnt
+#(out: tax value of the most popular property is between 300k and 500k)
+#(the minimum tax value is 22, the maximum tax value is 27,750k)
 
 ```{r}
 
-ddply(tempM2df, .(propertylandusetypeid), "nrow") # check the usetype summaries
+tax <-data.frame(ddply(mergeid, .(taxvaluedollarcnt), "nrow"))
+tax <- arrange(tax, desc(nrow), desc(taxvaluedollarcnt))
+tax[which.max(tax$taxvaluedollarcnt),]
+tax[which.min(tax$taxvaluedollarcnt),]
+print(tax)
+
+```
+
+# Explore the calculatedfinishedsquarefeet (out:the most popular property is without squarefeet data)
+#(the second one is 1200sq.feet, the 3rd one is 1080sq.feet...)
+# (with the results of the plotting image, the popular property is with sqaurefeet around 1200sq.feet=112sq.meter)
+```{r}
+
+feet <-data.frame(ddply(mergeid, .(calculatedfinishedsquarefeet), "nrow"))
+feet <- arrange(feet, desc(nrow))
+feet[which.max(feet$calculatedfinishedsquarefeet),]
+feet[which.min(feet$calculatedfinishedsquarefeet),]
+print(feet)
+plot(feet)
+
+```
+
+# Explore yearbuilt (out: the most popular property is built in 1955)
+#(top 30: 1950 - 1989)
+# plot: popular wider range (1950 - 2007))
+```{r}
+
+year <-data.frame(ddply(mergeid, .(yearbuilt), "nrow"))
+year <- arrange(year, desc(nrow))
+
+print(year)
+plot(year)
+
+```
+
+# Explore the parcelid (out: total sold: 90275, unique parcel id: 90150)
+#(there are 125 parcelid were sold more than 2 times)
+```{r}
+
+id <-data.frame(ddply(mergeid, .(parcelid), "nrow"))
+id <- arrange(id, desc(nrow))
+
+print(id)
+plot(id)
+
+# explore the logeerors of the same parcelid (out: no regular development of the error. expecially for parcelid 11842707, it was sold 3 times repectively in July, August and September. Then, its logerror appears big gap based on the general distribution of the logerror)
+a <- subset(mergeid, parcelid== "11842707" | parcelid=="10736972" |parcelid== "10790468")
+print(a)
+
+```
+
+
+#### try to use decision tree model to prediction the logeeror with 11 above explored useful features 
+#### divide the logerror into different 31 classes with interval 0.01 (range -0.15 --- +0.15  )
+
+
+```{r}
+p11 <- subset(mergeid, logerror < "-0.15" & logerror < "0") 
+#confirm the subset results
+p11[which.max(p1$logerror),]
+p11[which.min(p1$logerror),]
+
+p12 <- subset(mergeid, logerror == "0") 
+p13 <- subset(mergeid, logerror > "0" &logerror < "0.15") 
+p13[which.max(p1$logerror),]
+p13[which.min(p1$logerror),]
+
+p1 <- rbind(p11,p12,p13)
+p1[which.max(p1$logerror),]
+p1[which.min(p1$logerror),]
+
+p1 <- select(p1, parcelid, logerror, month, bathroomcnt, bedroomcnt, fips, latitude, longitude,  propertylandusetypeid, roomcnt, taxvaluedollarcnt, calculatedfinishedsquarefeet, yearbuilt)
+
+p1$taxvaluedollarcnt <- replace(p1$taxvaluedollarcnt, is.na(p1$taxvaluedollarcnt), 0)
+
+p1$calculatedfinishedsquarefeet <- replace(p1$calculatedfinishedsquarefeet, is.na(p1$calculatedfinishedsquarefeet), 0)
+
+p1$yearbuilt <- replace(p1$yearbuilt, is.na(p1$yearbuilt), 0)
+
+p2 <- data.frame(colSums(!is.na(p1)))
+names(p2)[1] <- c("values")
+
+print(p2)
+
+
+```
+We can learn that it is 90% logerror between the range -0.15 - +0.15
+
+
+# divide the logerror into their targeted classes and name it.
+
+```{r}
+
+p1$logerror <- replace(p1$logerror, p1$logerror <= "-0.14", "A")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.14" & p1$logerror <= "-0.13", "B")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.13" & p1$logerror <= "-0.12", "C")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.12" & p1$logerror <= "-0.11", "D")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.11" & p1$logerror <= "-0.10", "E")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.10" & p1$logerror <= "-0.09", "F")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.09" & p1$logerror <= "-0.08", "G")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.08" & p1$logerror <= "-0.07", "H")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.07" & p1$logerror <= "-0.06", "I")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.06" & p1$logerror <= "-0.05", "J")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.05" & p1$logerror <= "-0.04", "K")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.04" & p1$logerror <= "-0.03", "L")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.03" & p1$logerror <= "-0.02", "M")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.02" & p1$logerror <= "-0.01", "N")
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.01" & p1$logerror <= "0", "O")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0" & p1$logerror <= "0.01", "P")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.01" & p1$logerror <= "0.02", "Q")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.02" & p1$logerror <= "0.03", "R")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.03" & p1$logerror <= "0.04", "S")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.04" & p1$logerror <= "0.05", "T")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.05" & p1$logerror <= "0.06", "U")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.06" & p1$logerror <= "0.07", "V")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.07" & p1$logerror <= "0.08", "W")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.08" & p1$logerror <= "0.09", "X")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.09" & p1$logerror <= "0.10", "Y")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.10" & p1$logerror <= "0.11", "Z")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.11" & p1$logerror <= "0.12", "AA")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.12" & p1$logerror <= "0.13", "AB")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.13" & p1$logerror <= "0.14", "AC")
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.14" & p1$logerror <= "0.15", "AD")
+
+
+```
+
+# build the prediction model
+## split the data into 70% of training and 30% of testing data
+
+```{r}
+
+p1_train <- subset(p1, month == "January" | month=="February"| month=="March" | month=="April"| month=="May"| month=="June" | month=="July"| month == "August"| month =="September") # 90% of total p1
+
+p1_test <- subset(p1, month == "October" | month=="November"| month=="December") # 10% of total p1
+
+```
+
+# clean the data, keep numeric data only
+```{r}
+
+p1_train <- select_if(p1_train,is.numeric)
+
+p1_test <- select_if(p1_test,is.numeric)
+
+```
+
+# build formula
+```{r}
+
+colnames(p1_train)
+head(p1_train)
 
 ```
 
 ```{r}
 
-tempM2df <- select(mergeid, "parcelid","logerror","transactiondate", "month", "bathroomcnt", "bedroomcnt", "roomcnt", "fips","propertylandusetypeid", "rawcensustractandblock") 
-plot(tempM2df$bathroomcnt, tempM2df$logerror)
+formula <- logerror ~ parcelid + bathroomcnt + bedroomcnt + fips + latitude + longitude + propertylandusetypeid + roomcnt + taxvaluedollarcnt + calculatedfinishedsquarefeet + yearbuilt
+
+summary(p1_train)
+
+tree1 <- ctree(formula, data = p1_train)
+plot(tree1)
+
+table(predict(tree1, newdata = p1_test),pa_test$logerror)
 
 ```
 
 
-```{r,fig.width=10, fig.height=7}
-
-ggplot(tempM2df,aes(x=bathroomcnt, y=logerror)) + geom_jitter( colour = "brown") + xlab("Bathroom Number") + ylab("Logeeror")+ scale_y_continuous(limits = c(0, 0.02), breaks = seq(0, 0.02, 0.002)) +scale_x_continuous(limits = c(0,20), breaks = seq(0, 20, 1)) + theme_bw()
 
 
 
-```
-
-```{r,fig.width=10, fig.height=7}
-
-cor(tempM2df$fips, tempM2df$logerror)
-plot(tempM2df$fips, tempM2df$logerror)
-
-```
 
 
-```{r,fig.width=10, fig.height=7}
-
-cor(tempM2df$bedroomcnt, tempM2df$logerror)
-plot(tempM2df$bedroomcnt, tempM2df$logerror)
-
-```
 
 
-```{r,fig.width=10, fig.height=7}
-
-cor(tempM2df$roomcnt, tempM2df$logerror)
-plot(tempM2df$roomcnt, tempM2df$logerror)
-
-```
 
 
-```{r,fig.width=10, fig.height=7}
-
-cor(tempM2df$rawcensustractandblock, tempM2df$logerror)
-plot(tempM2df$rawcensustractandblock, tempM2df$logerror)
-
-```
 
 
-```{r,fig.width=10, fig.height=7}
-
-cor(tempM2df$propertylandusetypeid, tempM2df$logerror)
-plot(tempM2df$propertylandusetypeid, tempM2df$logerror)
-
-```
 
 
-```{r,fig.width=10, fig.height=7}
-B1 <- select_if(mergeid,is.numeric)
-B <- cor(tempM2df)
-corrplot(B, method = "circle")
 
-```
 
-# 1.4.4 Continue to narrow down tempM2df (seperate the parcelid in three counties: Los Angeles, Orange, Ventura)
+# Others:
+
+
+# 1.4.4 Continue to narrow down tempM2dfn (seperate the parcelid in three counties: Los Angeles, Orange, Ventura)
 
 As indicated above, the accuracy of Zestimate depands on the available data about the property and its location. Separate the individual month and county for training practice.
 
@@ -379,7 +596,6 @@ OR <- subset(tempM2df, fips == "6059") # Orange County
 VE <- subset(tempM2df, fips == "6111") #Ventura County
 
 ```
-
 
 
 # 1.5 Analyse the data from three counties seperately
@@ -418,95 +634,7 @@ plot(LA$bathroomcnt, LA$logerror)
 
 
 
-```{r,fig.width=10, fig.height=7}
-cor(LA$bedroomcnt, LA$logerror)
-plot(LA$bedroomcnt, LA$logerror)
 
-
-```
-
-```{r,fig.width=10, fig.height=7}
-
-cor(LA$roomcnt, LA$logerror)
-plot(LA$roomcnt, LA$logerror)
-
-```
-
-
-
-```{r,fig.width=10, fig.height=7}
-
-cor(LA$propertylandusetypeid, LA$logerror)
-plot(LA$propertylandusetypeid, LA$logerror)
-```
-
-
-
-```{r,fig.width=10, fig.height=7}
-
-cor(LA$rawcensustractandblock, LA$logerror)
-plot(LA$rawcensustractandblock, LA$logerror)
-```
-
-So, logerror and transaction frequancy have negative correlation. (is linear relationsip?)
-It is difficult to see any difference in error across the various 57 features. And features and logerror have no correlation. (but non-linear relationship?)
-
-
-
-
-
-```{r,fig.width=10, fig.height=7}
-z_vars <- colnames(mergeid)
-
-corplot(cor(mergeid[, ..z_vars], use='pairwise.complete.obs'), type='lower')
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-# 2.0 Prediction Model for non-linear
-
-# 2.1 Split the train16 into two parts:
-
-trainning data (from January to September)
-test data (from October to December)
-
-
-```{r}
-
-train16_train <- subset(train16, month == "January" | month=="February"| month=="March" | month=="April"| month=="May"| month=="June" | month=="July"| month == "August"| month =="September")
-
-
-
-train16_test <- subset(train16, month == "October" | month=="November"| month=="December")
-
-
-install.packages("forecast")
-library(forecast)
-
-arma_fit <- auto.arima(train16_train) # NOT WORK. what is univariate time series?
-
-
-
-
-
-```
-
-
-
-
-
-
-# Others:
 
 
 
@@ -520,37 +648,11 @@ dec16 <- subset(mergeid, month =="December", select = -transactiondate)
 ```
 
 
-## Other manipulation on the data
-
 
 ```{r,fig.width=10, fig.height=7}
 
-
-library(ggmap)
-CA <- get_map(location = "california", zoom = 6, scale = "auto", color = "bw", maptype = c("terrain"))
+CA <- get_map(location = "LA", zoom = 10, scale = "auto", color = "color", maptype = c("terrain"))
 ggmap(CA)
 
 ```
 
-# Zestimate predicts more accuracy on which kind of parcelid
-
-```{r}
-train16[,2] <- abs(train16$logerror)
-library(ggplot2)
-ggplot(train16, aes(logerror)) + geom_histogram(bins = 50) + scale_x_continuous(limits = c(0, 1), breaks = seq(0,1,0.002))+ theme_bw()
-tempC <- subset(train16, logerror < "0.05")
-
-```
-
-```{r}
-install.packages("party")
-library(party)
-formula <- regionidzip ~ parcelid + fips + regionidcity + regionidcounty
-ctreeA <- ctree(formula, data = prop16)# not allowed with missiong values
-```
-
-
-```{r}
-
-
-```
