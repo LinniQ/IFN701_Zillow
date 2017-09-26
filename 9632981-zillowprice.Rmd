@@ -72,10 +72,10 @@ library(plyr)
 #install.packages("dplyr")
 library(dplyr)
 
-install.packages("corrplot")
+#install.packages("corrplot")
 library(corrplot)
 
-library(ggmap)
+#library(ggmap)
 
 # for decision tree prediciton
 install.packages("party")
@@ -125,6 +125,8 @@ head(train16)
 
 summarise(train16, Median=median(train16$logerror), Mean= mean(train16$logerror), Max=max(train16$logerror), Min=min(train16$logerror), Std=sd(train16$logerror)) 
 
+summary(train16)
+
 ```
 
 
@@ -170,8 +172,6 @@ ggplot(train16, aes(logerror,fill = month)) + geom_histogram(bins = 50) + xlab (
 tempB <- ddply(train16, c("month"), summarise, mean = mean(logerror))
 tempB$month <- ordered(tempB$month, levels = c("January", "February", "March","April","May", "June", "July","August","September",  "October","November", "December"))
 
-# coef(lm(median ~ month, data = tempB ))
-
 ggplot(tempB, aes(x=month, y=mean, group=1)) + geom_point(color="brown", size=5) + geom_line(color="brown", size=1.5) + xlab ("Month (2016)") + ylab("Logerror (Brown) and Transaction Counts (Purple)") + scale_y_continuous(limits = c(0, 0.02), breaks = seq(0, 0.02, 0.002)) + geom_line(aes(x=tempA$month,y=tempA$transactioncount/10^6), color = "purple", size = 1.5) +theme_bw()
 
 ```
@@ -215,7 +215,7 @@ corrplot(A, method="circle")
 
 ```
 
-if it needs to replace the name of months into numeric
+if it needs to replace the name of months into numeric @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 ```{r,fig.width=10, fig.height=10}
 
 mergeid["month"] = "January" <- 1 
@@ -267,9 +267,9 @@ Let us narrow down the size of the dataset and focus on figuring out the relatio
 
 # 1.4.3 Clean the data of joinid (90150 sold parcelids), out = tempF2dfn and correlationships between logerror and comparable 10 features
 
-```{r}
-tempM1 <- subset(tempM,tempM > 58353) 
-nrow(tempM1) #32, including parcelid
+```{r,fig.width=12, fig.height=10}
+tempM1 <- subset(tempM,tempM > 58353) #32 fields, including parcelid
+print(tempM1)
 
 ```
 There are 32 features that contain nealy full values matching 90275 sold parcelid, including parcelid. They are listed in tempM1.
@@ -277,8 +277,8 @@ There are 32 features that contain nealy full values matching 90275 sold parceli
 ```{r}
 
 tempM2 <- subset(tempM,tempM == 90275) 
-nrow(tempM2) #19, including parcelid
-View(tempM2)
+print(tempM2) #19, including parcelid
+
 ```
 
 There are 19 features that contain 90275 values matching 90275 sold parcelid, including parcelid. They are listed in tempM2. As latitude and longtitude are not necessary for this project, becuase we don't need to scope to the parcelid located in detail streets. Let us extract the data with other 19 fields with 90275 parcelid to explore firstly. 
@@ -291,10 +291,12 @@ tempM2df <- select(mergeid, parcelid, logerror,transactiondate, month, bathroomc
 
 tempM2dfn <- select_if(tempM2df, is.numeric)
 colnames(tempM2dfn) #12 feature (19-7) transactiondate, month,propertycountylandusecode,propertyzoningdesc,fireplaceflag, taxdelinquencyflag
-B <- cor(tempM2dfn)
+C <- cor(tempM2dfn)
 corrplot(B, method="circle")
 
 ```
+
+
 ```{r}
 
 ddply(tempM2dfn, .(assessmentyear), "nrow")
@@ -457,13 +459,13 @@ print(a)
 ```{r}
 p11 <- subset(mergeid, logerror < "-0.15" & logerror < "0") 
 #confirm the subset results
-p11[which.max(p1$logerror),]
-p11[which.min(p1$logerror),]
+p11[which.max(p11$logerror),]
+p11[which.min(p11$logerror),]
 
 p12 <- subset(mergeid, logerror == "0") 
 p13 <- subset(mergeid, logerror > "0" &logerror < "0.15") 
-p13[which.max(p1$logerror),]
-p13[which.min(p1$logerror),]
+p13[which.max(p13$logerror),]
+p13[which.min(p13$logerror),]
 
 p1 <- rbind(p11,p12,p13)
 p1[which.max(p1$logerror),]
@@ -491,36 +493,36 @@ We can learn that it is 90% logerror between the range -0.15 - +0.15
 
 ```{r}
 
-p1$logerror <- replace(p1$logerror, p1$logerror <= "-0.14", "A")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.14" & p1$logerror <= "-0.13", "B")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.13" & p1$logerror <= "-0.12", "C")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.12" & p1$logerror <= "-0.11", "D")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.11" & p1$logerror <= "-0.10", "E")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.10" & p1$logerror <= "-0.09", "F")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.09" & p1$logerror <= "-0.08", "G")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.08" & p1$logerror <= "-0.07", "H")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.07" & p1$logerror <= "-0.06", "I")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.06" & p1$logerror <= "-0.05", "J")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.05" & p1$logerror <= "-0.04", "K")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.04" & p1$logerror <= "-0.03", "L")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.03" & p1$logerror <= "-0.02", "M")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.02" & p1$logerror <= "-0.01", "N")
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.01" & p1$logerror <= "0", "O")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0" & p1$logerror <= "0.01", "P")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.01" & p1$logerror <= "0.02", "Q")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.02" & p1$logerror <= "0.03", "R")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.03" & p1$logerror <= "0.04", "S")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.04" & p1$logerror <= "0.05", "T")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.05" & p1$logerror <= "0.06", "U")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.06" & p1$logerror <= "0.07", "V")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.07" & p1$logerror <= "0.08", "W")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.08" & p1$logerror <= "0.09", "X")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.09" & p1$logerror <= "0.10", "Y")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.10" & p1$logerror <= "0.11", "Z")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.11" & p1$logerror <= "0.12", "AA")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.12" & p1$logerror <= "0.13", "AB")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.13" & p1$logerror <= "0.14", "AC")
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.14" & p1$logerror <= "0.15", "AD")
+p1$logerror <- replace(p1$logerror, p1$logerror <= "-0.14", 1)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.14" & p1$logerror <= "-0.13", 2)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.13" & p1$logerror <= "-0.12", 3)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.12" & p1$logerror <= "-0.11", 4)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.11" & p1$logerror <= "-0.10", 5)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.10" & p1$logerror <= "-0.09", 6)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.09" & p1$logerror <= "-0.08", 7)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.08" & p1$logerror <= "-0.07", 8)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.07" & p1$logerror <= "-0.06", 9)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.06" & p1$logerror <= "-0.05", 10)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.05" & p1$logerror <= "-0.04", 11)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.04" & p1$logerror <= "-0.03", 12)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.03" & p1$logerror <= "-0.02", 13)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.02" & p1$logerror <= "-0.01", 14)
+p1$logerror <- replace(p1$logerror, p1$logerror > "-0.01" & p1$logerror <= "0", 0)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0" & p1$logerror <= "0.01", 15)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.01" & p1$logerror <= "0.02", 16)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.02" & p1$logerror <= "0.03", 17)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.03" & p1$logerror <= "0.04", 18)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.04" & p1$logerror <= "0.05", 19)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.05" & p1$logerror <= "0.06", 20)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.06" & p1$logerror <= "0.07", 21)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.07" & p1$logerror <= "0.08", 22)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.08" & p1$logerror <= "0.09", 23)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.09" & p1$logerror <= "0.10", 24)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.10" & p1$logerror <= "0.11", 25)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.11" & p1$logerror <= "0.12", 26)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.12" & p1$logerror <= "0.13", 27)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.13" & p1$logerror <= "0.14", 28)
+p1$logerror <- replace(p1$logerror, p1$logerror > "0.14" & p1$logerror <= "0.15", 29)
 
 
 ```
@@ -536,7 +538,7 @@ p1_test <- subset(p1, month == "October" | month=="November"| month=="December")
 
 ```
 
-# clean the data, keep numeric data only
+# clean the data, keep numeric data only @@@@@@@@@@@@@@@@@@@@@@ if needed , skip first
 ```{r}
 
 p1_train <- select_if(p1_train,is.numeric)
@@ -550,26 +552,32 @@ p1_test <- select_if(p1_test,is.numeric)
 
 colnames(p1_train)
 head(p1_train)
+head(p1_test)
 
 ```
 
-```{r}
+```{r,fig.width=30, fig.height=12}
 
 formula <- logerror ~ parcelid + bathroomcnt + bedroomcnt + fips + latitude + longitude + propertylandusetypeid + roomcnt + taxvaluedollarcnt + calculatedfinishedsquarefeet + yearbuilt
 
-summary(p1_train)
+#summary(p1_train)
+#data.matrix(p1_train)
 
 tree1 <- ctree(formula, data = p1_train)
 plot(tree1)
 
-table(predict(tree1, newdata = p1_test),pa_test$logerror)
+
 
 ```
 
 
 
 
+```{r}
+table(predict(tree1, newdata = p1_test),p1_test$logerror)
 
+
+```
 
 
 
