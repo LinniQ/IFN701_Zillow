@@ -72,10 +72,10 @@ library(plyr)
 #install.packages("dplyr")
 library(dplyr)
 
-#install.packages("corrplot")
+install.packages("corrplot")
 library(corrplot)
 
-#library(ggmap)
+library(ggmap)
 
 # for decision tree prediciton
 install.packages("party")
@@ -125,8 +125,6 @@ head(train16)
 
 summarise(train16, Median=median(train16$logerror), Mean= mean(train16$logerror), Max=max(train16$logerror), Min=min(train16$logerror), Std=sd(train16$logerror)) 
 
-summary(train16)
-
 ```
 
 
@@ -172,6 +170,8 @@ ggplot(train16, aes(logerror,fill = month)) + geom_histogram(bins = 50) + xlab (
 tempB <- ddply(train16, c("month"), summarise, mean = mean(logerror))
 tempB$month <- ordered(tempB$month, levels = c("January", "February", "March","April","May", "June", "July","August","September",  "October","November", "December"))
 
+# coef(lm(median ~ month, data = tempB ))
+
 ggplot(tempB, aes(x=month, y=mean, group=1)) + geom_point(color="brown", size=5) + geom_line(color="brown", size=1.5) + xlab ("Month (2016)") + ylab("Logerror (Brown) and Transaction Counts (Purple)") + scale_y_continuous(limits = c(0, 0.02), breaks = seq(0, 0.02, 0.002)) + geom_line(aes(x=tempA$month,y=tempA$transactioncount/10^6), color = "purple", size = 1.5) +theme_bw()
 
 ```
@@ -215,7 +215,7 @@ corrplot(A, method="circle")
 
 ```
 
-if it needs to replace the name of months into numeric @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+if it needs to replace the name of months into numeric (they studio can regonize the name of the month as the integer number by itself) @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 ```{r,fig.width=10, fig.height=10}
 
 mergeid["month"] = "January" <- 1 
@@ -267,9 +267,9 @@ Let us narrow down the size of the dataset and focus on figuring out the relatio
 
 # 1.4.3 Clean the data of joinid (90150 sold parcelids), out = tempF2dfn and correlationships between logerror and comparable 10 features
 
-```{r,fig.width=12, fig.height=10}
-tempM1 <- subset(tempM,tempM > 58353) #32 fields, including parcelid
-print(tempM1)
+```{r}
+tempM1 <- subset(tempM,tempM > 58353) 
+nrow(tempM1) #32, including parcelid
 
 ```
 There are 32 features that contain nealy full values matching 90275 sold parcelid, including parcelid. They are listed in tempM1.
@@ -277,7 +277,7 @@ There are 32 features that contain nealy full values matching 90275 sold parceli
 ```{r}
 
 tempM2 <- subset(tempM,tempM == 90275) 
-print(tempM2) #19, including parcelid
+nrow(tempM2) #19, including parcelid
 
 ```
 
@@ -291,12 +291,10 @@ tempM2df <- select(mergeid, parcelid, logerror,transactiondate, month, bathroomc
 
 tempM2dfn <- select_if(tempM2df, is.numeric)
 colnames(tempM2dfn) #12 feature (19-7) transactiondate, month,propertycountylandusecode,propertyzoningdesc,fireplaceflag, taxdelinquencyflag
-C <- cor(tempM2dfn)
+B <- cor(tempM2dfn)
 corrplot(B, method="circle")
 
 ```
-
-
 ```{r}
 
 ddply(tempM2dfn, .(assessmentyear), "nrow")
@@ -459,13 +457,11 @@ print(a)
 ```{r}
 p11 <- subset(mergeid, logerror < "-0.15" & logerror < "0") 
 #confirm the subset results
-p11[which.max(p11$logerror),]
-p11[which.min(p11$logerror),]
+
 
 p12 <- subset(mergeid, logerror == "0") 
 p13 <- subset(mergeid, logerror > "0" &logerror < "0.15") 
-p13[which.max(p13$logerror),]
-p13[which.min(p13$logerror),]
+
 
 p1 <- rbind(p11,p12,p13)
 p1[which.max(p1$logerror),]
@@ -489,7 +485,7 @@ print(p2)
 We can learn that it is 90% logerror between the range -0.15 - +0.15
 
 
-# divide the logerror into their targeted classes and name it.
+# divide the logerror into their targeted classes and name it.@@@@@@@@@@@@@@@(skip this step if fips is classifier)
 
 ```{r}
 
@@ -538,70 +534,132 @@ p1_test <- subset(p1, month == "October" | month=="November"| month=="December")
 
 ```
 
-# clean the data, keep numeric data only @@@@@@@@@@@@@@@@@@@@@@ if needed , skip first
-```{r}
 
-p1_train <- select_if(p1_train,is.numeric)
-
-p1_test <- select_if(p1_test,is.numeric)
-
-```
-
-# build formula
+# build formula ==> logerror as classifier (tree1)
 ```{r}
 
 colnames(p1_train)
 head(p1_train)
-head(p1_test)
 
 ```
 
-```{r,fig.width=30, fig.height=12}
+```{r,fig.width=30, fig.height=10}
 
 formula <- logerror ~ parcelid + bathroomcnt + bedroomcnt + fips + latitude + longitude + propertylandusetypeid + roomcnt + taxvaluedollarcnt + calculatedfinishedsquarefeet + yearbuilt
 
-#summary(p1_train)
-#data.matrix(p1_train)
+summary(p1_train)
 
 tree1 <- ctree(formula, data = p1_train)
 plot(tree1)
 
-
-
 ```
 
 
+```{r,fig.width=30, fig.height=10}
 
-
-```{r}
 table(predict(tree1, newdata = p1_test),p1_test$logerror)
 
+```
+
+
+
+```{r,fig.width=30, fig.height=10}
+
+confusionMatrix(predict(tree1, newdata = p1_test),p1_test$logerror) # not work
+
+```
+
+# build formula ==> fips as classifier (tree2)
+
+
+
+```{r,fig.width=30, fig.height=10}
+
+formula <- fips ~ parcelid+ bathroomcnt + bedroomcnt + logerror + latitude + longitude + propertylandusetypeid + roomcnt + taxvaluedollarcnt + calculatedfinishedsquarefeet + yearbuilt
+
+
+tree2 <- ctree(formula, data = p1_train)
+plot(tree2)
 
 ```
 
 
 
 
+```{r,fig.width=30, fig.height=10}
+
+confusionMatrix(predict(tree2, newdata = p1_test),p1_test$fips)
+
+```
+
+# build formula ==> propertylandusetypeid as classifier (tree3)
 
 
 
+```{r,fig.width=30, fig.height=10}
+
+formula <- propertylandusetypeid ~ parcelid + bathroomcnt + bedroomcnt + logerror + latitude + longitude + fips+ roomcnt + taxvaluedollarcnt + calculatedfinishedsquarefeet + yearbuilt
 
 
+tree3 <- ctree(formula, data = p1_train)
+plot(tree3)
+
+```
+
+```{r,fig.width=30, fig.height=10}
+
+confusionMatrix(predict(tree3, newdata = p1_test),p1_test$propertylandusetypeid) # not work
+
+```
 
 
+As what has been discovered above, it has nearly 100% accurary prediction rate when setting the counties as the classifier. Given the testing dataset, it needs to do 7736 times of prediction. Then, 
 
-# Others:
+the correct classification (True Positive + True Negative) of the matrix is 7735 (LA5113 OR1987 VE635)
+
+There just is one error as the off-diagonal in the matrix (False Positive and False Negative).
+
+Therefore the accuracy of Zestimate depands on the location of property.
 
 
-# 1.4.4 Continue to narrow down tempM2dfn (seperate the parcelid in three counties: Los Angeles, Orange, Ventura)
+## Multiple Linear Regression
 
-As indicated above, the accuracy of Zestimate depands on the available data about the property and its location. Separate the individual month and county for training practice.
 
 ```{r}
 
-LA <- subset(tempM2df, fips == "6037") #Los Angeles County
-OR <- subset(tempM2df, fips == "6059") # Orange County
-VE <- subset(tempM2df, fips == "6111") #Ventura County
+logerror.lm = lm(logerror ~ bathroomcnt + bedroomcnt + fips + latitude + longitude + propertylandusetypeid + roomcnt + taxvaluedollarcnt + calculatedfinishedsquarefeet + yearbuilt, data = p1)
+
+coeffs1 = coefficients(logerror.lm); coeffs1
+```
+
+```{r}
+
+subset(p1, p1$parcelid==10711755)
+```
+
+
+```{r}
+
+i = -7.841951e-02 + 1.383555e-03*3 + (-1.600287e-03 * 3) + 5.133221e-05 * 6037 + (-4.451312e-09*34222040) + 1.265148e-09 * (-118622240) + 2.544108e-04*261 + -6.140825e-06 *0 + -5.989319e-10 * 459844 +  5.762484e-06 * 1589 + (-7.239128e-07) * 1959
+print(i)
+```
+
+i is the predictive value for parcelid 10711755, but its actual logerror is -0.0182. The difference is 0.02047942. Regarding the the standard deviation of zillow's logerror (0.1610788), this difference is okay. 
+```{r}
+
+e = i - (-0.0182)
+print(e)
+```
+
+
+# 1.4.4 Continue to narrow down tempM2dfn to check the logerror distribution for three counties (seperate the parcelid in three counties: Los Angeles, Orange, Ventura)
+
+
+```{r}
+
+LA <- subset(p1, fips == "6037") #Los Angeles County
+OR <- subset(p1, fips == "6059") # Orange County
+VE <- subset(p1, fips == "6111") #Ventura County
 
 ```
 
