@@ -1,5 +1,5 @@
- ---
-title: "IFN701: Zillow's Home Value Prediction (Zestimate) --- Round 1 Logerrow Prediction"
+---
+title: "IFN701: Zillow's Home Value Prediction (Zestimate) --- Round 1 Logerror Prediction"
 author: "Linni, QIN n9632981"
 output:
   pdf_document: default
