@@ -1,5 +1,5 @@
- ---
-title: "IFN701: Zillow's Home Value Prediction (Zestimate) --- Round 1 Logerrow Prediction"
+---
+title: "IFN701: Zillow's Home Value Prediction (Zestimate) --- Round 1 Logerror Prediction"
 author: "Linni, QIN n9632981"
 output:
   pdf_document: default
@@ -85,6 +85,9 @@ library(corrplot)
 #install.packages("caret")
 library(party)
 library(caret)
+
+install.packages("Metrics")
+library(Metrics)
 
 ```
 
@@ -693,21 +696,13 @@ summary(pre1_a)
 plot(pre1_a)
 summary(test1$logerror)
 ```
-From the summary, the mean the mix min looks fine...but why the accuracy rate appears so low.
-# Calculate prediction accuracy rates (maybe wrong code)
 ```{r}
-pre1_anold <- data.frame(cbind(origin=test1$logerror, pred=pre1_a))
-cor_accuracy1_a <- cor(pre1_anold)
-print(cor_accuracy1_a) #correlation accuracy10.8%
-min_max_accuracy1_a <- mean(apply(pre1_anold, 1, min) / apply(pre1_anold, 1, max)) 
-print(min_max_accuracy1_a) #-inf
-mape1_a <- mean((abs(pre1_anold$predict.model1_a..test1. - pre1_anold$origin))/pre1_anold$origin)
 
-print(mape1_a) #inf
-                
-      
-
+mse(pre1_a,test1$logerror)
 ```
+
+
+# Calculate prediction accuracy rates 
 
 
 ## TEST 2 7:3 (8 variables, delete latitude & longitude)
@@ -719,10 +714,11 @@ pre1_b <- data.frame(predict(model1_b, test1))
 pre1_bnold <- data.frame(cbind(origin=test1$logerror, pred=pre1_b))
 cor_accuracy1_b <- cor(pre1_bnold)
 print(cor_accuracy1_b) #10.4%
+mse(pre1_b,test1$logerror)
 
 ```
 
-## TEST 3 7:3 (6 variables, delete bathroomcnt & bedroomcnt & roomcnt)
+## TEST 3 7:3 (5 variables, delete bathroomcnt & bedroomcnt & roomcnt)
 ```{r}
 
 model1_c = lm(logerror ~  fips + propertylandusetypeid + taxvaluedollarcnt + calculatedfinishedsquarefeet + yearbuilt, data = train1)
@@ -730,18 +726,341 @@ pre1_c <- data.frame(predict(model1_c, test1))
 pre1_cnold <- data.frame(cbind(origin=test1$logerror, pred=pre1_c))
 cor_accuracy1_c <- cor(pre1_cnold)
 print(cor_accuracy1_c) #9.8%
+mse(pre1_c,test1$logerror)
+
+```
+
+```{r}
+
+model1_d = lm(logerror ~  fips , data = train1)
+pre1_d <- data.frame(predict(model1_d, test1)) 
+pre1_dnold <- data.frame(cbind(origin=test1$logerror, pred=pre1_d))
+cor_accuracy1_d <- cor(pre1_dnold)
+print(cor_accuracy1_d) 
+mse(pre1_d,test1$logerror)
+lm.beta(model1_d) # it is said online that cor value doesnot work for some regression variable but the stand cor
+
+
+```
+
+
+# After talking to Guido
+
+NO need to care about the varibales, just focus on the train16 data. Use the month and detail date as vaiable to find out if more data and provide a better prediction
+```{r}
+train16$transactiondate <- as.numeric(train16$transactiondate)
+
+train16$transactiondate <- gsub("[/]", "" , train16$transactiondate, perl=TRUE)
+
+is.numeric(train16$month)
+
+train16$month <- match(train16$month, month.name)
+
+mergeid$transactiondate <- gsub("[/]", "" , mergeid$transactiondate, perl=TRUE)
+mergeid$transactiondate <- as.numeric(mergeid$transactiondate)
+```
+
+Month by MOnth: Train= the 1st day of the month till the last but the 7 days left
+However, if there is no transaction during the last 7 days of the month, we need to explore the unuique date for each month to determine the range of the sample.
+
+
+```{r}
+
+jan <- subset(train16, month == "1")
+feb <- subset(train16, month == "2")
+mar <- subset(train16, month == "3")
+apr <- subset(train16, month == "4")
+may <- subset(train16, month == "5")
+jun <- subset(train16, month == "6")
+jul <- subset(train16, month == "7")
+aug <- subset(train16, month == "8")
+sep <- subset(train16, month == "9")
+oct <- subset(train16, month == "10")
+nov <- subset(train16, month=="11")
+dec <- subset(train16, month =="12")
+
+#   https://www.r-statistics.com/tag/aggregate/
+```
+
+
+
+```{r}
+(ddply(jan, .(transactiondate), "nrow"))
+train_jan <- subset(jan, transactiondate < "25012016")
+test_jan<- subset(jan, transactiondate >= "25012016")
+
+```
+
+```{r}
+
+model_jan = lm(logerror ~  transactiondate, data = train_jan)
+pre_jan <- data.frame(predict(model_jan, test_jan)) 
+
+mse(pre_jan,test_jan$logerror)
 
 ```
 
 
 
+```{r}
+(ddply(feb, .(transactiondate), "nrow"))
+train_feb <- subset(feb, transactiondate < "23022016")
+test_feb<- subset(jan, transactiondate >= "23022016")
+
+```
+
+```{r}
+
+model_feb = lm(logerror ~  transactiondate, data = train_feb)
+pre_feb <- data.frame(predict(model_feb, test_feb)) 
+
+mse(pre_feb,test_feb$logerror)
+
+```
+
+
+```{r}
+
+jf <- rbind(jan,feb)
+train_jf <- subset(jf, transactiondate < "23022016")
+test_jf<- subset(jf, transactiondate >= "23022016")
+
+model_jf = lm(logerror ~  transactiondate, data = train_jf)
+pre_jf <- data.frame(predict(model_jf, test_jf)) 
+
+mse(pre_jf,test_jf$logerror) # predcit the whole feb 0.03293103
+
+
+```
 
 
 
+```{r}
+
+train_mar <- subset(mar, transactiondate < "25032016")
+test_mar<- subset(mar, transactiondate >= "25032016")
+model_mar = lm(logerror ~  transactiondate, data = train_mar)
+pre_mar <- data.frame(predict(model_mar, test_mar)) 
+
+mse(pre_mar,test_mar$logerror)
+
+```
+
+```{r}
+jfm<-rbind(jan,feb,mar)
+train_jfm <- subset(jfm, transactiondate < "25032016")
+test_jfm<- subset(jfm, transactiondate >= "25032016")
+model_jfm = lm(logerror ~  transactiondate, data = train_jfm)
+pre_jfm <- data.frame(predict(model_jfm, test_jfm)) 
+
+mse(pre_jfm,test_jfm$logerror) # predict the whole mar:0.02927437
+
+```
+
+```{r}
+
+train_apr <- subset(apr, transactiondate < "24042016")
+test_apr<- subset(apr, transactiondate >= "24042016")
+model_apr = lm(logerror ~  transactiondate, data = train_apr)
+pre_apr <- data.frame(predict(model_apr, test_apr)) 
+
+mse(pre_apr,test_apr$logerror)
+
+```
+
+```{r}
+jfma<-rbind(jan,feb,mar,apr)
+train_jfma <- subset(jfma, transactiondate < "24042016")
+test_jfma<- subset(jfma, transactiondate >= "24042016")
+model_jfma = lm(logerror ~  transactiondate, data = train_jfma)
+pre_jfma <- data.frame(predict(model_jfma, test_jfma)) 
+
+mse(pre_jfma,test_jfma$logerror) # value for predict the whole apr 0.03204248
+
+```
+
+```{r}
+
+train_may <- subset(may, transactiondate < "25052016")
+test_may<- subset(may, transactiondate >= "25052016")
+model_may = lm(logerror ~  transactiondate, data = train_may)
+pre_may <- data.frame(predict(model_may, test_may)) 
+
+mse(pre_may,test_may$logerror)
+
+```
+```{r}
+jfmam<-rbind(jan,feb,mar,apr,may)
+train_jfmam <- subset(jfmam, transactiondate < "25052016")
+test_jfmam<- subset(jfmam, transactiondate >= "25052016")
+model_jfmam = lm(logerror ~  transactiondate, data = train_jfmam)
+pre_jfmam <- data.frame(predict(model_jfmam, test_jfmam)) 
+
+mse(pre_jfmam,test_jfmam$logerror) # similar value if it predict the whole may 0.02939354
+
+```
+
+```{r}
+
+train_jun <- subset(jun, transactiondate < "24062016")
+test_jun<- subset(jun, transactiondate >= "24062016")
+model_jun = lm(logerror ~  transactiondate, data = train_jun)
+pre_jun <- data.frame(predict(model_jun, test_jun)) 
+
+mse(pre_jun,test_jun$logerror)
+
+```
+
+
+```{r}
+jfmamj<-rbind(jan,feb,mar,apr,may,jun)
+train_jfmamj <- subset(jfmamj, transactiondate < "24062016")
+test_jfmamj<- subset(jfmamj, transactiondate >= "24062016")
+model_jfmamj = lm(logerror ~  transactiondate, data = train_jfmamj)
+pre_jfmamj <- data.frame(predict(model_jfmamj, test_jfmamj)) 
+
+mse(pre_jfmamj,test_jfmamj$logerror) # the same vaule if it predict the whole jun 0.2823762
+
+```
 
 
 
+```{r}
 
+train_jul <- subset(jul, transactiondate < "25072016")
+test_jul<- subset(jul, transactiondate >= "25072016")
+model_jul = lm(logerror ~  transactiondate, data = train_jul)
+pre_jul <- data.frame(predict(model_jul, test_jul)) 
+
+mse(pre_jul,test_jul$logerror)
+
+```
+```{r}
+jfmamjj<-rbind(jan,feb,mar,apr,may,jun,jul)
+train_jfmamjj <- subset(jfmamjj, transactiondate < "25072016")
+test_jfmamjj<- subset(jfmamjj, transactiondate >= "25072016")
+model_jfmamjj = lm(logerror ~  transactiondate, data = train_jfmamjj)
+pre_jfmamjj <- data.frame(predict(model_jfmamjj, test_jfmamjj)) 
+
+mse(pre_jfmamjj,test_jfmamjj$logerror) # 0.02758651 if it predict the whole july
+
+```
+
+
+```{r}
+
+train_aug <- subset(aug, transactiondate < "25082016")
+test_aug<- subset(aug, transactiondate >= "25082016")
+model_aug = lm(logerror ~  transactiondate, data = train_aug)
+pre_aug <- data.frame(predict(model_aug, test_aug)) 
+
+mse(pre_aug,test_aug$logerror)
+
+```
+
+```{r}
+jfmamjja<-rbind(jan,feb,mar,apr,may,jun,jul,aug)
+train_jfmamjja <- subset(jfmamjja, transactiondate < "25082016")
+test_jfmamjja<- subset(jfmamjja, transactiondate >= "25082016")
+model_jfmamjja = lm(logerror ~  transactiondate, data = train_jfmamjja)
+pre_jfmamjja <- data.frame(predict(model_jfmamjja, test_jfmamjja)) 
+
+mse(pre_jfmamjja,test_jfmamjja$logerror) # 0.02664009 if it predict the whole aug
+
+```
+
+```{r}
+
+train_sep <- subset(sep, transactiondate < "24092016")
+test_sep<- subset(sep, transactiondate >= "24092016")
+model_sep = lm(logerror ~  transactiondate, data = train_sep)
+pre_sep <- data.frame(predict(model_sep, test_sep)) 
+
+mse(pre_sep,test_sep$logerror)
+
+```
+
+
+```{r}
+jfmamjjas<-rbind(jan,feb,mar,apr,may,jun,jul,aug,sep)
+train_jfmamjjas <- subset(jfmamjjas, transactiondate < "24092016")
+test_jfmamjjas<- subset(jfmamjjas, transactiondate >= "24092016")
+model_jfmamjjas = lm(logerror ~  transactiondate, data = train_jfmamjjas)
+pre_jfmamjjas <- data.frame(predict(model_jfmamjjas, test_jfmamjjas)) 
+
+mse(pre_jfmamjjas,test_jfmamjjas$logerror) # 0.02715848 if it predict the whole sep
+
+```
+
+```{r}
+
+train_oct <- subset(oct, transactiondate < "25102016")
+test_oct<- subset(oct, transactiondate >= "25102016")
+model_oct = lm(logerror ~  transactiondate, data = train_oct)
+pre_oct <- data.frame(predict(model_oct, test_oct)) 
+
+mse(pre_oct,test_oct$logerror)
+
+```
+
+```{r}
+jfmamjjaso<-rbind(jan,feb,mar,apr,may,jun,jul,aug,sep,oct)
+train_jfmamjjaso <- subset(jfmamjjaso, transactiondate < "25102016")
+test_jfmamjjaso<- subset(jfmamjjaso, transactiondate >= "25102016")
+model_jfmamjjaso = lm(logerror ~  transactiondate, data = train_jfmamjjaso)
+pre_jfmamjjaso <- data.frame(predict(model_jfmamjjaso, test_jfmamjjaso)) 
+
+mse(pre_jfmamjjaso,test_jfmamjjaso$logerror) # 0.02600165 if it predict the whole sep
+
+```
+
+
+```{r}
+
+train_nov <- subset(nov, transactiondate < "24112016")
+test_nov<- subset(nov, transactiondate >= "24112016")
+model_nov = lm(logerror ~  transactiondate, data = train_nov)
+pre_nov <- data.frame(predict(model_nov, test_nov)) 
+
+mse(pre_nov,test_nov$logerror)
+#(ddply(nov, .(transactiondate), "nrow")) # mse is lower than others, smaller size of transaction
+
+```
+
+```{r}
+jfmamjjason<-rbind(jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov)
+train_jfmamjjason <- subset(jfmamjjason, transactiondate < "24112016")
+test_jfmamjjason<- subset(jfmamjjason, transactiondate >= "24112016")
+model_jfmamjjason = lm(logerror ~  transactiondate, data = train_jfmamjjason)
+pre_jfmamjjason <- data.frame(predict(model_jfmamjjason, test_jfmamjjason)) 
+
+mse(pre_jfmamjjason,test_jfmamjjason$logerror) # 0.02573006 if it predict the whole nov
+
+```
+
+
+```{r}
+
+train_dec <- subset(dec, transactiondate < "24122016")
+test_dec<- subset(dec, transactiondate >= "24122016")
+model_dec = lm(logerror ~  transactiondate, data = train_dec)
+pre_dec <- data.frame(predict(model_dec, test_dec)) 
+
+mse(pre_dec,test_dec$logerror) # larger than others, but still smaller size of transaction
+
+
+```
+
+```{r}
+jfmamjjasond<-rbind(jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec)
+train_jfmamjjasond <- subset(jfmamjjasond, transactiondate < "24122016")
+test_jfmamjjasond<- subset(jfmamjjasond, transactiondate >= "24122016")
+model_jfmamjjasond = lm(logerror ~  transactiondate, data = train_jfmamjjasond)
+pre_jfmamjjasond <- data.frame(predict(model_jfmamjjasond, test_jfmamjjasond)) 
+
+mse(pre_jfmamjjasond,test_jfmamjjasond$logerror) # 0.02619549 if it predict the whole dec
+
+```
 
 
 
