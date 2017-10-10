@@ -1,48 +1,24 @@
 ---
-title: "IFN701: Zillow's Home Value Prediction (Zestimate) --- Round 1 Logerror Prediction"
+title: 'IFN701: Zillow''s Home Value Prediction (Zestimate) --- Round 1 Logerror Prediction'
 author: "Linni, QIN n9632981"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ## Introduction
 
-This R markdown file is going to find out the logerror of Zestimate in Oct. Nov. Dec. of both 2016 and 2017, which is associated to 3millions of properties in three counties in California, USA (LA, OR, VA). Logerror is the difference between the Zestimate's preicted market value and the actual sales price of the particular property. 
+  This R markdown file is going to find out the logerror of Zestimate in Oct. Nov. Dec. of 2017, which is associated to 3millions of properties in three counties in California, USA (LA, OR, VA). The prediction model will be trained and check the accuracy based on using the similar datasets of 2016. Logerror is the difference between the Zestimate's preicted market value and the actual sales price of the particular property.(Note: Detail introcution can be referred to Project Proposal)
 
-(Note: Detail introcution can be referred to Project Proposal)
+# Official data from Kaggle:
+  train_2016_v2.csv and train_2017 contatin the logerror of properties sold within three specific counties through 2016 and 2017 respectively.
+  properties_2016.csv and properties_2017.csv include the total 3millions of properties within three specific counties with common 57 attributes such as room numbers, square footage and locations. The parcelid of these two years are the same but the information of their attributes are different with certain level.
 
-Official data from Kaggle:
-train_2016_v2.csv contatins the logerror of around 90thounds of properties sold within three specific counties through 2016.
-properties_2016.csv includes the total 3millions of properties within three specific counties with common 57 attributes such as room numbers, square footage and locations.
+# Outcomes:
 
-
-# Documentations:
-
-train16: a dataframe with importing train_2016_v2.csv (90275sold parcelid in 2016 (3% = 90275/2985217), logerror, transactiondate, + month)
-  tempA: monthly transaction count based on train16
-  tempB: monthly logerror mean based on train16
-  tempAB: merging tempA and tempB, calculating the correlation between transaction counts and logerror mean
-
-prop16: a dataframe with importing properties_2016.csv (57 features for 3millions of parcelid)
-
-joinid: merging train16 and prop16 (90150 intersection parceldid with their 57 features)
-
-mergeid: merging joinid and train16 (90275 parcelid with their 57 features and logerro, transactiondate, month)
-tempM: missing data counts(58 features and their counter !na)
-  tempM1: containing 32 features that missing data less than unitcnt(58353) (feature range for extended data exploartion)
-    tempM2: among tempM1, there are 19 features containing data for all 90275 parcelid (correlation needed equal value frequency)
-      tempM2df: extract the useful features based on exploring tempM2 from mergeid
-          LA: LA1(transaction count) LA2(montly logerror mean) LA3 (LA1+LA2)
-          OR:
-          VE:
-
-
-# Outcome:
-
-1. data analysis report: find out the valuable data from the collected samples
+1. data analysis report: find out the valuable data from the samples
 eg.
-    the pattern of the sales (seasonal sales pattern)
+    the pattern of the sales 
     the pattern of the error distribution (flat and vertical versions, overestimation (56%) > underestimation (44%))
     
     the parttern of missing data
@@ -55,440 +31,723 @@ eg.
     
 2. Prediction model
 eg.
-    decision tree/logistic regression to predict the logerror 
-    --- Decision tree doesn't fit this problem, as the return confusionMatrix has no equal x cord and y cord classifers.
-    --- Multiple linear regression works okay, but not sure the prediction accuracy
-    
-
-Prolem solving Methods:
-
-...
+    Multiple regression to predict the logerror
+      --- prediction based on the datasize
+      --- prediction based on the important features
+    MSE to measure the accuracy of the predictions
 
 
 # Call the useful packages
 
 ```{r}
+library(lubridate)
 library(ggplot2)
-
 library(plyr)
-
 #install.packages("dplyr")
 library(dplyr)
 
 #install.packages("corrplot")
 library(corrplot)
 
-#library(ggmap)
-
-# for decision tree prediciton
-#install.packages("party")
-#install.packages("caret")
-library(party)
-library(caret)
-
-install.packages("Metrics")
+#install.packages("Metrics")
 library(Metrics)
 
 ```
 
 
-
-
-
-
 # Import the available data
 
-```{r,fig.width=10, fig.height=7}
+```{r}
 
-train16 <- read.csv("./train_2016_v2.csv", header = TRUE) # "fread()" is a function to read large file and creat the table faster and more convenient.
+train16 <- read.csv("./train_2016_v2.csv", header = TRUE)
+train17 <- read.csv("./train_2017.csv", header = TRUE) 
 
 prop16 <- read.csv("./properties_2016.csv", header = TRUE)
-colnames(prop16)
+prop17 <- read.csv("./properties_2017.csv", header = TRUE)
 ```
-
-
-## 1. Data Analysis
-
-
-First of all, let's explore the Error rate, Transaction pattern and Logerror Distribution.
-
 
 ```{r}
-# convert the date into the name of the month for further visulation analysis
-train16$month <- months(as.Date(train16$transactiondate, format = "%d/%m/%y"))
-head(train16)
-
+# check any difference between the property features of 2017 and 2016
+all(colnames(prop16)==colnames(prop17))
 ```
-
-# 1.1 The accuracy of Zestimate (https://www.zillow.com/zestimate/) 
-
-    "Zillow's accuracy has a median error rate of 5%." 
-    
-    Is the median error value cloaser to their offical error rate?
-    0.006 = 0.6% ?
 
 ```{r}
-
-summarise(train16, Median=median(train16$logerror), Mean= mean(train16$logerror), Max=max(train16$logerror), Min=min(train16$logerror), Std=sd(train16$logerror)) 
-
+# the total number of the parcelid looks the same but check any difference between the parcelid of 2017 and 2016
+all(unique(prop16$parcelid)== unique(prop17$parcelid))
 ```
 
+There are the same physical features for the properties of both 2016 and 2017, but there exist some differences among the parcelids.
 
-# 1.2 Pattern of Transaction Counts of Zillow in 2016.
+## Part 1: Data Analysis
+
+# 1.1 Data preparation and the overview of statics value of 2016 and 2017's logerror.
+
+  First of all, let's explore the train_2016 and train_2017's Error rate, Transaction pattern and Logerror Distribution.
+  
+# A.Prepare the data of training data of 2016 and 2017 equally
 
 ```{r}
-
-tempA <- ddply(train16, .(month), "nrow") 
-names(tempA)[2] <- c("transactioncount")
-tempA$month <- ordered(tempA$month, levels = c("December","November","October","September", "August", "July","June", "May", "April", "March",   "February","January" ))
-
-
-ggplot(tempA) + geom_bar(aes(x= month, y=transactioncount), fill = "pink", stat = "identity") + xlab("Months") + ylab("Transaction Counts of Properties on Zillow (2016)")+ scale_y_continuous(limits = c(0, 11500), breaks = seq(0, 11500, 1000)) + geom_hline(yintercept = mean(tempA$transactioncount),linetype = "dashed", size = 2, color = "brown") + coord_flip() + theme_bw()
+# convert the date into month for further visulation analysis
+#train16$month <- months(as.Date(train16$transactiondate, format = "%d/%m/%y"))
+train16$month <- month(train16$transactiondate)
+train16$transactiondate <- gsub("[/]", "" , train16$transactiondate, perl=TRUE)
+train16$transactiondate <- as.numeric(train16$transactiondate)
+is.numeric(train16$transactiondate) # check if the numeric transfermation is successful.
 ```
 
-The brown dashed line is the mean of the transaction time of Zillow in 2016. It can be learned from the diagram that it was a cold market from October to December. Their volume is far lower than the mean of transaction counts.  
+  The current train16 contains logerror for sold parcelids througout 2016 as stated by Kaggle. Then, the training data of 2017 is available from January to September. We need to predict the logerror of last quarter of 2017. In the meantime, the prediction model needs to be built based on the training data of 2016 from January to September, then its accuracy can be check by using the available logerror in the last quarter of 2016. Beforehand, let's keep the month range of both training datasets equally for further analysis.
 
-# 1.3 Logerror Distribution pattern of Zillow in 2016
+```{r}
+train16_beforeOct <- subset(train16, month < 10)
+train16_afterOct <- subset(train16, month >=10)
+```
+  Before October of 2016, there were 81733 parcelids which were sold. In the last quarter of 2016, 8542 parcelids were sold.
 
-1.3.1 Distribution of Logerror
+```{r}
+train17$month <- month(train17$transactiondate)
+train17$transactiondate <- gsub("[-]", "" , train17$transactiondate, perl=TRUE)
+train17$transactiondate <- as.numeric(train17$transactiondate)
+is.numeric(train17$transactiondate)
+```
 
+  Check the statistic logerror data of both 2016 and 2017.
+```{r}
+summarise(train16_beforeOct, Median=median(train16_beforeOct$logerror), Mean= mean(train16_beforeOct$logerror), Max=max(train16_beforeOct$logerror), Min=min(train16_beforeOct$logerror), Std=sd(train16_beforeOct$logerror)) 
+```
+
+```{r}
+summarise(train17, Median=median(train17$logerror), Mean= mean(train17$logerror), Max=max(train17$logerror), Min=min(train17$logerror), Std=sd(train17$logerror)) 
+
+```
+
+  Studying from the above statics values, the accuracy of prediction of 2017 appears a bit worse than 2016 because the median, mean and standard deviation of 2017 perform slightly higher than that of 2016. Meanwhile, the outliners of 2017's logerror goes a bit far away of its median value while comparing that with 2016. More analysis about the logerror will be done in section 1.3.2 to confirm if the logerror performance of 2017 does really worse than 2016.
+
+
+# 1.2 Pattern of Transaction Frequency of Zillow.
+
+# 1.2.1 The transaction frequency of whole 2016.
+
+```{r,fig.width=7, fig.height=5}
+
+transactionCount16A <- ddply(train16, .(month), "nrow") 
+names(transactionCount16A)[2] <- c("transactioncount")
+
+ggplot(transactionCount16A, aes(x= month, y=transactioncount)) + geom_point(color="brown", size=5) + geom_line(color="brown", size=1.5) + xlab("Months") + ylab("Transaction Counts of Properties on Zillow (2016)")+ scale_x_continuous(limits = c(1, 12), breaks = seq(1, 12, 1)) + scale_y_continuous(limits = c(0, 11500), breaks = seq(0, 11500, 2000)) + geom_hline(yintercept = mean(transactionCount16A$transactioncount),linetype = "dashed", size = 1.5, color = "purple")  + theme_bw()
+```
+
+The purple dashed line is the mean of the transaction time of Zillow in 2016. It can be learned from the diagram that it was a cold market from October to December. Their volume is far lower than the mean of transaction counts. Starting from March to September, there was a hot market for the property transaction. 
+
+
+# 1.2.2 Transaction frequency before the October of 2016 and 2017
+```{r,fig.width=7, fig.height=5}
+transactionCount16B <- ddply(train16_beforeOct, .(month), "nrow") 
+names(transactionCount16B)[2] <- c("transactioncount")
+transactionCount17B <- ddply(train17, .(month), "nrow") 
+names(transactionCount17B)[2] <- c("transactioncount")
+```
+
+  Let's plot two years transaction frequency in one image as below. 
+
+```{r,fig.width=7, fig.height=5}
+months <- 1:9
+t16 <- transactionCount16B$transactioncount
+t17 <- transactionCount17B$transactioncount
+
+plot(months, t16, pch=0, type="b", col="red", ylim=c(0, 11500))
+par(new=TRUE)
+plot(months,t17, pch=1, type="b", col="blue", ylim=c(0, 11500))
+```
+  The red line is the frequency of 2016, then the blue line is the frequency of 2017. It significantly shows that the transaction in September of 2017 reduces greatly than the transaction in the same period of 2016. Regarding the other eight months, the transaction frequency developed similiarly.
+
+# 1.3 Logerror Distribution pattern of Zillow in 2016 and 2017
+
+# 1.3.1 Logerror distribution of 2016 (before October)
+
+  The mean of the logerror we got from the last section is near 0.011. Let's narrow down the plot range of the logerror from 1 to -1 to explore its dirstribution.
 
 ```{r,fig.width=10, fig.height=7} 
-
-train16$month <- ordered(train16$month, levels = c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October","November", "December"))
-
-ggplot(train16) + geom_jitter(aes(x=month, y=logerror), stat = "identity", color = "brown") + xlab ("Months (2016)") + ylab("Logerror Distribution") + scale_y_continuous(limits = c(-5, 5), breaks = seq(-5, 5, 0.25)) + geom_hline(yintercept = 0 ,linetype = "dashed", size = 2, color = "black")+ theme_bw()
-
-
+ggplot(train16_beforeOct) + geom_jitter(aes(x=month, y=logerror), stat = "identity", color = "brown") + xlab ("Months (2016)") + ylab("Logerror Distribution") +scale_x_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))+ scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.025)) + geom_hline(yintercept = 0.011 ,linetype = "dashed", size = 1, color = "black")+ theme_bw()
 ```
+
+  Check the amount of overestimation and understimation of 2016
 
 ```{r,fig.width=10, fig.height=7}
-ggplot(train16, aes(logerror,fill = month)) + geom_histogram(bins = 50) + xlab ("Monthly Logerror Distribution of Zillow (2016)") + ylab("Count") + scale_y_continuous(limits = c(0, 7000), breaks = seq(0, 7000, 700)) + scale_x_continuous(limits = c(-0.5, 0.5), breaks = seq(-0.5,0.5,0.05))+ theme_bw()
+nrow(train16_beforeOct[train16_beforeOct$logerror >= 0,]) #45390, overestimation is more than underestimation
+nrow(train16_beforeOct[train16_beforeOct$logerror < 0,]) #36343
+```
+
+# 1.3.2 Logerror distribution of 2017 (before October)
+  The mean of the logerror we got from the last section is near 0.017. Let's narrow down the plot range of the logerror from 1 to -1 to explore its dirstribution.
+```{r,fig.width=10, fig.height=7} 
+
+ggplot(train17) + geom_jitter(aes(x=month, y=logerror), stat = "identity", color = "brown") + xlab ("Months (2017)") + ylab("Logerror Distribution") +scale_x_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))+ scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.025)) + geom_hline(yintercept = 0.017 ,linetype = "dashed", size = 1, color = "black")+ theme_bw()
+
 
 ```
+
+  Check the amount of overestimation and understimation of 2017
+  As similar as 2016, the Zestimate made the overestimation than uderestimation in 2017.
 
 ```{r,fig.width=10, fig.height=7}
-
-nrow(train16[train16$logerror >= 0,]) #50608, overestimation is more than underestimation
-nrow(train16[train16$logerror < 0,]) #39667
-
+nrow(train17[train17$logerror >= 0,]) #43897, overestimation is more than underestimation
+nrow(train17[train17$logerror < 0,]) #33716
 ```
 
+  In conclusion, except the logerror show a high tense of distribution around 0, we cannot learn too much from the distribution of these two years. They looks nearly the same. Let's try to find out if there any difference of their logerror monthly mean.
 
-1.3.2 Relationship between Monthly Logerror Mean and the Monthly Transaction Counts
+# 1.3.3 Relationship between Monthly Logerror Mean and the Monthly Transaction Counts (2016 + 2017)
+
+```{r,fig.width=7, fig.height=5}
+
+errorCount16B <- ddply(train16_beforeOct, c("month"), summarise, mean = mean(logerror))
+errorCount17B <- ddply(train17, c("month"), summarise, mean = mean(logerror))
+
+months <- 1:9
+e16 <- errorCount16B$mean
+e17 <- errorCount17B$mean
+
+plot(months, e16, pch=0, type="b", col="red", yaxt="n",ylim=c(0, 0.04))
+par(new=TRUE)
+plot(months,e17, pch=1, type="b", col="blue", yaxt="n",ylim=c(0, 0.04))
+axis(side=2)
+axis(side=4)
+
+```
+  As indicated as the above graph, we can conclude that the performance of 2016 logerror prediction achieved better work than 2017 does.
+  Furthermore, comparing the monthly logerror mean graph and the image of monthly transaction frequency, it is noted that the distribution of those two datasets appears some negative relationship. When the transaction goes high, the logeeror goes low. It means more transaction causes the logerror more accuracy.
+  Let's use the combined plotting image to see if there is a clear trend as what we assumed.
+  
+# Relathionship between 2016 monthly transaction volume and monthly logerror mean
+  
+```{r,fig.width=7, fig.height=5}
+
+months <- 1:9
+e16 <- errorCount16B$mean
+t16 <- transactionCount16B$transactioncount
+
+plot(months, e16, pch=0, type="b", col="red",yaxt="n", ylim=c(0, 0.04))
+par(new=TRUE)
+plot(months,t16, pch=1, type="b", col="blue",yaxt="n", ylim=c(0, 11500))
+axis(side=2, at=c(0, 0.04))
+axis(side=4, at=c(0, 11500))
+
+```
+# Relathionship between 2017 monthly transaction volume and monthly logerror mean
+```{r,fig.width=7, fig.height=5}
+
+months <- 1:9
+e17 <- errorCount17B$mean
+t17 <- transactionCount17B$transactioncount
+
+plot(months, e17, pch=0, type="b", col="red",yaxt="n", ylim=c(0, 0.04))
+par(new=TRUE)
+plot(months,t17, pch=1, type="b", col="blue",yaxt="n", ylim=c(0, 11500))
+axis(side=2, at=c(0, 0.04))
+axis(side=4, at=c(0, 11500))
+
+```
+  
+  As indicated as the above two graphs, the blue lines denote the monthly transaction frequencies. The red lines denote the monthly logerror means. The high logerrors happened when the transaction frequency stayed low. A stable flutuation of the low error happened when the transaction frequency stayed with high volume. These two variables run in the opposite directions as shown. Let's check their correlation rate by using cor().
 
 ```{r,fig.width=10, fig.height=7}
-
-tempB <- ddply(train16, c("month"), summarise, mean = mean(logerror))
-tempB$month <- ordered(tempB$month, levels = c("January", "February", "March","April","May", "June", "July","August","September",  "October","November", "December"))
-
-ggplot(tempB, aes(x=month, y=mean, group=1)) + geom_point(color="brown", size=5) + geom_line(color="brown", size=1.5) + xlab ("Month (2016)") + ylab("Logerror (Brown) and Transaction Counts (Purple)") + scale_y_continuous(limits = c(0, 0.02), breaks = seq(0, 0.02, 0.002)) + geom_line(aes(x=tempA$month,y=tempA$transactioncount/10^6), color = "purple", size = 1.5) +theme_bw()
-
+cor(errorCount16B$mean, transactionCount16B$transactioncount)
+cor(errorCount17B$mean, transactionCount17B$transactioncount)
 ```
 
-As indicated as the above graph, the brown line represents the mean of error of each month and the purple line denotes the transaction times that is being sclaled by dividing 10^6. Considering the distribution of the error, the high logerrors happened among January, February, September, October, November and December of 2016 when the transaction times stayed low. A stable flutuation of the error happened from March to August when the transaction times stayed high. These two variables run in the opposite direction as shown. Let's check their correlation rate by using cor().
+  In staticstics, the correlation is represented within the range of -1, 0 and 1. 0 indicates no correlation and 1 denotes a positive correlation.
 
+  The negative correlation as found above between the logerror and the transaction numbers denotes while transaction number increases the logeeror decreases. (http://www.investopedia.com/terms/n/negative-correlation.asp)
 
-```{r,fig.width=10, fig.height=7}
-tempAB <- merge(tempA, tempB, by = "month")
+  Question: Can we use the transanction frequency to predict the error?
 
-cor(tempAB$mean, tempAB$transactioncount/10^6)
+  There hides certain high negative realtionship between these two factors.However, we have transaction data for the whole year of 2016 only. It is lack of strong evidence to prove that the transaction frequency of 2017 stays low in the last season as 2016 did. Therefore, the transaction value might be one important factor to predict the logerror, but the error might not be predicted based solely on the transaction trends.
 
-```
+# 1.4  Find more important feature to influence the logerror 
 
-In staticstics, the correlation is represented within the range of -1, 0 and 1. 0 indicates no correlation and 1 denotes a positive correlation.
-
-The negative correlation as above between the logerror and the transaction numbers denotes while transaction number increases the logeeror decreases. (http://www.investopedia.com/terms/n/negative-correlation.asp)
-
-Question: Can we use the transanction time to predict the error?
-
-There is data of 2016 only for training. It is lack of strong evidence to prove that the transaction times stay low in the last season of every year. It means the error cannot be predicted based only on the transaction.
-
-
-
-# 1.4  Coorelations among 57 home attributes 
-
-According to Zillow, the accuracy of Zestimate depands on the available data supplied by the homeowners. So, does that mean:
-January, February, September, October, November and December of 2016 = less home feature value? Or just caused by the seasonal sales.
-March, April, May, June, July and August of 2016 = enough home feature value?
-
-
-Let's combine prop16 and train16 by parcelid. The result file will tell us the physical features of the sold property in 2016 and their respective error. As well as, the relationships hidden among those factors might be disclosure.
+  Beside the possible importance of transaction data for the logerror, according to Zillow, the accuracy of Zestimate depands on the available data supplied by the homeowners. prop16 and prop17 contain those value from the property owners. So, let's combine respective properties and the trainning data by parcelid. The output files will tell us the physical features value and their logerros of the sold property in 2016 and 2017. As well as, the hidden relationships among those factors and logerror might be disclosure.
 
 # 1.4.1 Join property data and train data
 
-```{r,fig.width=10, fig.height=10}
-
-mergeid <- merge (x=train16, y=prop16, by = "parcelid", all.x = TRUE)
-#mergeid$logerror <- abs(mergeid$logerror)
-
-mergeidA <- select_if(mergeid,is.numeric) # correlationship is calculated with numeric value only
-A <- cor(mergeidA) 
-corrplot(A, method="circle") # first exploration
-
+```{r}
+mergeid16 <- merge(x=train16_beforeOct, y=prop16, by = "parcelid", all.x = TRUE)
+mergeid16B <- merge(x=train16_afterOct, y=prop16, by = "parcelid", all.x = TRUE)
+mergeid17 <- merge(x=train17, y=prop17, by = "parcelid", all.x = TRUE)
 ```
 
+After the files are merged, let's clean the non-numeric data, as the later correlation is calculated with numberic value only.
 
-if it needs to replace the name of months into numeric @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-
-mergeid["month"] = "January" <- 1 
-mergeid["month"] = "February" <- 2
-mergeid["month"] = "March" <- 3
-mergeid["month"] = "April" <- 4
-mergeid["month"] = "May" <- 5
-mergeid["month"] = "June" <- 6
-mergeid["month"] = "July" <- 7
-mergeid["month"] = "August" <- 8
-mergeid["month"] = "September" <- 9
-mergeid["month"] = "October" <- 10
-mergeid["month"] = "November" <- 11
-mergeid["month"] = "December" <- 12
-
-
-The reason to caused the above question make is that there are missing value among different features. They are not equally filled with data. We need to explore the missing value and find the suitbale field to check their correlationships.
-
+```{r}
+mergeid16 <- select_if(mergeid16,is.numeric) 
+mergeid17 <- select_if(mergeid17,is.numeric) 
+```
 
 # 1.4.2 check the missing data for each field
 
-
 ```{r,fig.width=10, fig.height=20}
-#sum(!is.na(mergeid$airconditioningtypeid)) # count the row number of column with values
+#sum(!is.na(mergeid16n$airconditioningtypeid)) # count the row number of column with values
+#airc16 <- ddply(mergeid16n, .(airconditioningtypeid), "nrow") # count row number for each unique value in the column
 
+temp16M <- data.frame(colSums(!is.na(mergeid16)))
+names(temp16M)[1] <- c("values")
 
-#tempM1 <- ddply(mergeid, .(airconditioningtypeid), "nrow") # count row number for each unique value in the column
+ggplot(temp16M,aes(x=reorder(rownames(temp16M),-values), y=values)) + geom_bar( fill = "pink", stat = "identity") + xlab("Property Physical Features (2016)") + ylab("Available values Counts for Featrues")+ scale_y_continuous(limits = c(0, 91000), breaks = seq(0, 91000, 5000)) +coord_flip() + theme_bw()
 
-#apply(mergeid, 2, function(x) length(which(!is.na(x)))) # same results with colSums(!is.na(joinid))
+```
 
-tempM <- data.frame(colSums(!is.na(mergeid)))
-names(tempM)[1] <- c("values")
+  As we can see, from the top to feature of "unicnt" where appears obsious decline of the data volume, there are 29 (near 50%) property features that were supplied leass values. Let us narrow down the size of the dataset and focus on figuring out the relationship between the logerror and the feature variables with nearly full values.
 
+```{r}
+subset(temp16M,rownames(temp16M)=="unitcnt") #52628 
+```
+```{r}
+temp16M1 <- subset(temp16M,temp16M > 52628)
+nrow(temp16M1)
+```
+  There are 27 features that contain nealy full values in 2016.
 
-ggplot(tempM,aes(x=reorder(rownames(tempM),-values), y=values)) + geom_bar( fill = "pink", stat = "identity") + xlab("Property Physical Features (2016)") + ylab("Available values Counts for Featrues")+ scale_y_continuous(limits = c(0, 91000), breaks = seq(0, 91000, 5000)) +coord_flip() + theme_bw()
+  The same operation is applied to deal with the missing data of 2017.
+```{r,fig.width=10, fig.height=20}
 
+temp17M <- data.frame(colSums(!is.na(mergeid17)))
+names(temp17M)[1] <- c("values")
 
+ggplot(temp17M,aes(x=reorder(rownames(temp17M),-values), y=values)) + geom_bar( fill = "pink", stat = "identity") + xlab("Property Physical Features (2017)") + ylab("Available values Counts for Featrues")+ scale_y_continuous(limits = c(0, 91000), breaks = seq(0, 91000, 5000)) +coord_flip() + theme_bw()
 ```
 
 ```{r}
-subset(tempM,rownames(tempM)=="unitcnt") #58353 
-
+subset(temp17M,rownames(temp17M)=="unitcnt") #50703
 ```
-As we can see, from the top to unicnt, there are 29 (near 50%) property features that were supplied values for less than 58353 of the total amount of sold parcelids.
-
-Let us narrow down the size of the dataset and focus on figuring out the relationship between the estimate error and the feature variables with full values.
-
-# 1.4.3 Clean the data of joinid (90150 sold parcelids), out = tempF2dfn and correlationships between logerror and comparable 10 features
-
-```{r,fig.width=12, fig.height=10}
-tempM1 <- subset(tempM,tempM > 58353) #32 fields, including parcelid
-print(tempM1)
-
-```
-There are 32 features that contain nealy full values matching 90275 sold parcelid, including parcelid. They are listed in tempM1.
 
 ```{r}
+temp17M1 <- subset(temp17M,temp17M > 50703)
+nrow(temp17M1)
+```
+  The same as 2016, there are 27 numeric features that contain nealy full values in 2017.
+  
+# 1.4.3 Narrow down the datasize and focus on discovering the valuable factors that might influence the logerror
+  
+  Let's create two data frameworks with those 27 valuable features for 2016 and 2017.
+  
+```{r} 
+# based on the 27 feature names of temp16M1
+temp16df <- select(mergeid16, parcelid, logerror,transactiondate, month, bathroomcnt, bedroomcnt, calculatedbathnbr, calculatedfinishedsquarefeet, finishedsquarefeet12, fips,fullbathcnt, latitude, longitude, lotsizesquarefeet, propertylandusetypeid, rawcensustractandblock, regionidcity, regionidcounty, regionidzip, roomcnt, yearbuilt,structuretaxvaluedollarcnt,taxvaluedollarcnt, assessmentyear, landtaxvaluedollarcnt, taxamount, censustractandblock)
 
-tempM2 <- subset(tempM,tempM == 90275) 
-print(tempM2) #19, including parcelid
+# based on the 27 feature names of temp16M1
+temp17df <- select(mergeid17, parcelid, logerror,transactiondate, month, bathroomcnt, bedroomcnt, calculatedbathnbr, calculatedfinishedsquarefeet, finishedsquarefeet12, fips,fullbathcnt, latitude, longitude, lotsizesquarefeet, propertylandusetypeid, rawcensustractandblock, regionidcity, regionidcounty, regionidzip, roomcnt, yearbuilt,structuretaxvaluedollarcnt,taxvaluedollarcnt, assessmentyear, landtaxvaluedollarcnt, taxamount, censustractandblock)
+``` 
 
+
+  With reference to the forum information supplied from Andrew Martin (Data Scientist at Zillow), https://www.kaggle.com/c/zillow-prize-1/discussion/34168, there are some duplicate data for the features of the properties. 
+  bathroomcnt = calculatedbathnbr = fullbathcnt: calculatedbathnbr and fullbathcnt are calculated by the assessor. bathroomcnt is calculated by Zillow.
+  calculatedfinishedsquarefeet = finishedsquarefeet12: finishedsquaredfeet12 is calculated by Zillow. Calculatedfinishedsquarefeet is calculated by the assessor.
+  taxvaluedollarcnt = landtaxvaluedollarcnt + structuretaxvaluedollarcnt
+  As the fips is named based on the individual county, so does the regionidcounty. Let's see if they are duplicated.
+  
+```{r}
+ddply(temp16df, .(fips), "nrow")
+ddply(temp16df, .(regionidcounty), "nrow") 
 ```
 
-There are 19 features that contain 90275 values matching 90275 sold parcelid, including parcelid. They are listed in tempM2. As latitude and longtitude are not necessary for this project, becuase we don't need to scope to the parcelid located in detail streets. Let us extract the data with other 19 fields with 90275 parcelid to explore firstly. 
+  The results show that the properties from a same palce have the same fips code and regionidecounty.
+  fips = "6037", regionidcounty = "3101", Los Angeles County
+  fips = "6059", regionidcounty = "1286", Orange County
+  fips = "6111", regionidcounty = "2061", Ventura County
 
-With reference to the forum information supplied from Andrew Martin (Data Scientist at Zillow), https://www.kaggle.com/c/zillow-prize-1/discussion/34168, there are some duplicate data in the train16. Be careful to use it for calculation.
+  In sum, there are 6 features contain the duplicated value for the parcelid. It needs to be cleaned.
+  
+# Clean Duplicated data
+
+```{r} 
+temp16df <- select(mergeid16, parcelid, logerror,transactiondate, month, bathroomcnt, bedroomcnt, calculatedfinishedsquarefeet, fips,latitude, longitude, lotsizesquarefeet, propertylandusetypeid, rawcensustractandblock, regionidcity, regionidzip, roomcnt, yearbuilt, assessmentyear, taxvaluedollarcnt, taxamount, censustractandblock)
+
+temp17df <- select(mergeid17, parcelid, logerror,transactiondate, month, bathroomcnt, bedroomcnt, calculatedfinishedsquarefeet, fips,latitude, longitude, lotsizesquarefeet, propertylandusetypeid, rawcensustractandblock, regionidcity, regionidzip, roomcnt, yearbuilt, assessmentyear, landtaxvaluedollarcnt, taxamount, censustractandblock)
+```  
+
+# Replace the missing data with 0 to make all the value of feature full filled
+```{r}
+temp16df <- replace(temp16df, is.na(temp16df), 0)
+temp17df <- replace(temp17df, is.na(temp17df), 0)
+```
+
+# Explore the correlation among each dataframe
 
 ```{r,fig.width=10, fig.height=7}
-
-tempM2df <- select(mergeid, parcelid, logerror,transactiondate, month, bathroomcnt, bedroomcnt, fips, hashottuborspa,latitude, longitude,  propertycountylandusecode, propertylandusetypeid, propertyzoningdesc, rawcensustractandblock, regionidcounty, roomcnt,  fireplaceflag, assessmentyear, taxdelinquencyflag)
-
-tempM2dfn <- select_if(tempM2df, is.numeric)
-colnames(tempM2dfn) #12 feature (19-7) transactiondate, month,propertycountylandusecode,propertyzoningdesc,fireplaceflag, taxdelinquencyflag
-B <- cor(tempM2dfn)
-corrplot(B, method="circle")
-
+cor16 <- cor(temp16df) 
+corrplot(cor16, method="circle") 
 ```
 
-
-```{r}
-
-ddply(tempM2dfn, .(assessmentyear), "nrow")
-
-```
-
-```{r,fig.width=10, fig.height=5}
-
-tempM2dfn <- tempM2dfn[,!(colnames(tempM2dfn) == "assessmentyear")]
-colnames(tempM2dfn) #11 feature , delete "assessmentyear""
-C <- cor(tempM2dfn)
-corrplot(C, method="number")
-
-```
-
-So, what we can learn from these two sections 1.3 and 1.4 is that logerror and transaction frequancy have negative correlation. However, it is hardly to see the correlationship between logerror and other features.
-
-# Duplicated data
-
-```{r}
-
-ddply(tempM2dfn, .(fips), "nrow")
-
-ddply(tempM2dfn, .(regionidcounty), "nrow") 
-
-```
-
-The results show that the properties from a same palce have the same fips code and regionidecounty.
-fips = "6037", regionidcounty = "3101", Los Angeles County
-fips = "6059", regionidcounty = "1286", Orange County
-fips = "6111", regionidcounty = "2061", Ventura County
-
-Therefore, delete "regionidcounty".
-```{r}
-
-tempM2dfn <- tempM2dfn[,!(colnames(tempM2dfn) == "regionidcounty")]
-colnames(tempM2dfn) #10 feature , delete "regionidcounty""
-
-```
 
 ```{r,fig.width=10, fig.height=7}
+cor17 <- cor(temp17df) 
+corrplot(cor17, method="circle") 
+```
 
-plot(tempM2dfn$logerror, col=tempM2dfn$fips)
+
+
+  There is something wrong with the assessmentyear when calculating the correlation for 2016. Let's see what value is in this column.
+
+```{r}
+ddply(temp16df, .(assessmentyear), "nrow")
+ddply(temp17df, .(assessmentyear), "nrow")
+```
+  It seems all the parcelid listed in train16 were assessed in 2015 and all the parcelid listed in train17 were assessed in 2016. The constant value results in the error messeage of the calculation. Meanwhile, there is no future transactiondate. Therefore, we can delete the column of assessment year, transactiondate and the month for further prediction.
+  
+  In conclusion, we cannot find any correlation of logerror and other features as the above two correlation matrices, even through those features are filled fully. Those value might have directly relationship with the price prediction of the parcelid. 
+  (Note: I have tried different ways like using "caret" and "randomForest" to find out the relationship between logerror and the combination of 21 features. The model seems does not fit these datasets. The operations caused computer dead often. As the suggestion from my supervisor, the part can be skipped.)
+  
+  So far, we have finished the prepration phase and most of the data analysis. Let's proceed the prediction model based on the helpful values we found so far.
+  
+# Part 2: Prediction Model
+
+  As we need to forecast the actual logerror value for the last quarter of 2016 and 2017, multiple linear regression model might contribute more helpful function than the binary prediction models like decision tree and logic regression.
+  
+  Although we cannot find the correlation between the features and logerror, we need to try first those 21 features for prediction before ignoring using them to build the prediction formula. Let's built two models with using 21 features and transactiondate seperately to explore their MSE value. If 
+
+# 2.1 Model with using 21 features Vs. Model with using transactiondata only
+
+```{r}
+set.seed(100)
+test16_a <- sample(1:nrow(temp16df), 0.7*nrow(temp16df))
+train16_a<- temp16df[test16_a,]
+test16_a <- temp16df[-test16_a,]
+
+model16_a = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = train16_a)
+summary(model16_a)
+pre16_a <- data.frame(predict(model16_a, test16_a)) 
+mse(pre16_a,test16_a$logerror)
+
+```
+
+```{r}
+model16_b = lm(logerror ~ transactiondate, data = train16_a)
+pre16_b <- data.frame(predict(model16_b, test16_a)) 
+mse(pre16_b,test16_a$logerror)
+
+```
+  
+  The MSE value returned from two different prediction models almost equal(21-feature 0.0252 vs. transactiondate 0.0253). It means that applying the model16_a into the logerror prediction for total 3millions parcelid in 2017 is workable.
+
+  Furthermore, as our target is to predict the logerror month by month in the last quarter of the year, what we are supposed to do next is to find out what size of the training data can achieve better predction score. For example, use one month data as training data to predict the next month data. Or use three month data to predict the next month data. Or use the existing data to predict the next month data. As there is no strong evidence to prove the logerror trend of 2016 represent the one of 2017 with the existing data. Thus, we need to calculate the average prediction score for the different prediction data sizes. Then, find out the most propriate sizes to apply in the prediction of year 2017.
+
+# 2.1.1 Predict month data based on previous one month data 
+# Prepare the different sizes of training data and testing data
+
+```{r}
+mergeid16B <- replace(mergeid16B, is.na(mergeid16B), 0)
+mergeid16BP <- select(mergeid16B, parcelid, logerror, transactiondate,month, bathroomcnt, bedroomcnt, calculatedfinishedsquarefeet, fips,latitude, longitude, lotsizesquarefeet, propertylandusetypeid, rawcensustractandblock, regionidcity, regionidzip, roomcnt, yearbuilt, assessmentyear, taxvaluedollarcnt, taxamount, censustractandblock)
+jan16 <- subset(temp16df, month == "1")
+feb16 <- subset(temp16df, month == "2")
+mar16 <- subset(temp16df, month == "3")
+apr16 <- subset(temp16df, month == "4")
+may16 <- subset(temp16df, month == "5")
+jun16 <- subset(temp16df, month == "6")
+jul16 <- subset(temp16df, month == "7")
+aug16 <- subset(temp16df, month == "8")
+sep16 <- subset(temp16df, month == "9")
+oct16 <- subset(mergeid16BP, month == "10")
+nov16 <- subset(mergeid16BP, month=="11")
+dec16 <- subset(mergeid16BP, month =="12")
+```
+
+Jan data predicts Feb data
+```{r}
+model16_jan = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = jan16)
+pre16_feb <- data.frame(predict(model16_jan, feb16)) 
+mse(pre16_feb,feb16$logerror)
+```
+
+
+Feb data predicts Mar data
+```{r}
+model16_feb = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = feb16)
+pre16_mar <- data.frame(predict(model16_feb, mar16)) 
+mse(pre16_mar,mar16$logerror)
+
+```
+Mar data predicts Apr data
+```{r}
+model16_mar = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = mar16)
+pre16_apr <- data.frame(predict(model16_mar, apr16)) 
+mse(pre16_apr,apr16$logerror)
+
+```
+Apr data predicts May data
+```{r}
+model16_apr = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = apr16)
+pre16_may <- data.frame(predict(model16_apr, may16)) 
+mse(pre16_may,may16$logerror)
+
+```
+
+May data predicts June data
+```{r}
+model16_may = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = may16)
+pre16_jun <- data.frame(predict(model16_may, jun16)) 
+mse(pre16_jun,jun16$logerror)
+
+```
+June data predicts July data
+```{r}
+model16_jun = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = jun16)
+pre16_jul <- data.frame(predict(model16_jun, jul16)) 
+mse(pre16_jul,jul16$logerror)
+
+```
+July data predicts Aug data
+```{r}
+model16_jul = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = jul16)
+pre16_aug <- data.frame(predict(model16_jul, aug16)) 
+mse(pre16_aug,aug16$logerror)
+```
+Aug data predicts Sep data
+```{r}
+model16_aug = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = aug16)
+pre16_sep <- data.frame(predict(model16_aug, sep16)) 
+mse(pre16_sep,sep16$logerror)
+```
+Sep data predicts Oct data
+```{r}
+model16_sep = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = sep16)
+pre16_oct <- data.frame(predict(model16_sep, oct16)) 
+mse(pre16_oct,oct16$logerror)
+```
+Oct data predicts Nov data
+```{r}
+model16_oct = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = oct16)
+pre16_nov <- data.frame(predict(model16_oct, nov16)) 
+mse(pre16_nov,nov16$logerror)
+```
+Nov data predicts Dec data
+```{r}
+model16_nov = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = nov16)
+pre16_dec <- data.frame(predict(model16_nov, dec16)) 
+mse(pre16_dec,dec16$logerror)
+```
+
+
+# 2.1.2 Predict month data based on previous three month data 
+# Prepare the different sizes of training data and testing data
+
+```{r}
+jfm16 <- rbind(jan16,feb16,mar16)
+fma16 <- rbind(feb16,mar16,apr16)
+mam16 <- rbind(mar16,apr16,may16)
+amj16 <- rbind(apr16,may16,jun16)
+mjj16 <- rbind(may16,jun16,jul16)
+jja16 <- rbind(jun16,jul16,aug16)
+jas16 <- rbind(jul16,aug16,sep16)
+aso16 <- rbind(aug16,sep16,oct16)
+son16 <- rbind(sep16,oct16,nov16)
+```
+
+Jan+Feb+Mar data predicts Apr data
+```{r}
+model16_jfm = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = jfm16)
+pre16_apr2 <- data.frame(predict(model16_jfm, apr16)) 
+mse(pre16_apr2,apr16$logerror)
+```
+
+Feb+Mar+Apr data predicts May data
+```{r}
+model16_fma = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = fma16)
+pre16_may2 <- data.frame(predict(model16_fma, may16)) 
+mse(pre16_may2,may16$logerror)
+```
+
+Mar+Apr+May data predicts June data
+```{r}
+model16_mam = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = mam16)
+pre16_jun2 <- data.frame(predict(model16_mam, jun16)) 
+mse(pre16_jun2,jun16$logerror)
+```
+
+Apr+May+June data predicts July data
+```{r}
+model16_amj = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = amj16)
+pre16_jul2 <- data.frame(predict(model16_amj, jul16)) 
+mse(pre16_jul2,jul16$logerror)
+```
+
+May+June+July data predicts Aug data
+```{r}
+model16_mjj = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = mjj16)
+pre16_aug2 <- data.frame(predict(model16_mjj, aug16)) 
+mse(pre16_aug2,aug16$logerror)
+```
+
+June+July+Aug data predicts Sep data
+```{r}
+model16_jja = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = jja16)
+pre16_sep2 <- data.frame(predict(model16_jja, sep16)) 
+mse(pre16_sep2,sep16$logerror)
+```
+
+July+Aug+Sep data predicts Oct data
+```{r}
+model16_jas = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = jas16)
+pre16_oct2 <- data.frame(predict(model16_jas, oct16)) 
+mse(pre16_oct2,oct16$logerror)
+```
+
+Aug+Sep+Oct data predicts Nov data
+```{r}
+model16_aso = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = aso16)
+pre16_nov2 <- data.frame(predict(model16_aso, nov16)) 
+mse(pre16_nov2,nov16$logerror)
+```
+
+Sep+Oct+Nov data predicts Dec data
+```{r}
+model16_son = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = son16)
+pre16_dec2 <- data.frame(predict(model16_son, dec16)) 
+mse(pre16_dec2,dec16$logerror)
+```
+
+# 2.1.3 Predict month data based on all previous data 
+
+Prepare the different sizes of training data and testing data
+```{r}
+jtos16 <- rbind(jan16,feb16,mar16,apr16,may16,jun16,jul16,aug16,sep16)
+jtoo16 <- rbind(jan16,feb16,mar16,apr16,may16,jun16,jul16,aug16,sep16, oct16)
+jton16 <- rbind(jan16,feb16,mar16,apr16,may16,jun16,jul16,aug16,sep16, oct16, nov16)
+```
+
+Predict Oct data
+```{r}
+model16_jtos = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = jtos16)
+pre16_oct3 <- data.frame(predict(model16_jtos, oct16)) 
+mse(pre16_oct2,oct16$logerror)
+```
+
+Predict Nov data
+```{r}
+model16_jtoo = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = jtoo16)
+pre16_nov3 <- data.frame(predict(model16_jtoo, nov16)) 
+mse(pre16_nov3,nov16$logerror)
+```
+Predict Dec data
+```{r}
+model16_jton = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = jton16)
+pre16_dec3 <- data.frame(predict(model16_jton, dec16)) 
+mse(pre16_dec3,dec16$logerror)
+```
+
+All the MSE values are made into a table. Pls see the attached table "Zillow Prediction Data Sizes_MSE".
+To sum up, the training data size with 3months data got the best MSE score to predict the data.
+Predict month data based on previous one month data, Average MSE: 0.027734
+Predict month data based on previous three month data, Average MSE: 0.02455
+Pedict month data based on all previous data, Average MSE: 0.024566
+
+# 2.2 Applying the model and the way to select the training dataset into the prediction of 2017
+
+```{r}
+mergeid17 <- replace(mergeid17, is.na(mergeid17), 0)
+prop17 <- replace(prop17, is.na(prop17),0)
+pre17 <- select(mergeid17, parcelid,logerror, transactiondate,month, bathroomcnt,bedroomcnt,calculatedfinishedsquarefeet,fips,latitude, longitude,lotsizesquarefeet,propertylandusetypeid,rawcensustractandblock,regionidcity,regionidzip,roomcnt,yearbuilt, taxvaluedollarcnt,taxamount,censustractandblock)
+
+traindata17 <- subset(pre17, pre17$month > 6) # use the data of July, Aug and Sept to be training data
+model17_jas = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = traindata17)
+pre17_oct <- data.frame(predict(model17_jas, prop17))# predict logerror for 3millions parcelid
+nrow(pre17_oct)
+head(pre17_oct)
+
+```
+As the mean of logerror of 2017 from Jan to Setp is 0.01675494 that means the overestimatioin is nearly 1.7%. To predict 3millions of parcelid in Nov and Dec, I will use the following ways to reduce the gap between the future actual logerror.
+```{r}
+pre17_nov <- pre17_oct[1] * (1-1.7/100)
+pre17_dec <- pre17_nov[1] * (1-1.7/100)
+head(pre17_nov)
+head(pre17_dec)
 
 ```
 
 
-# explore bathroomcnt (out: During 2016, the most popular parcelid is with 2 bathrooms, then 3 and 1)
-```{r}
 
-bath <-data.frame(ddply(tempM2dfn, .(bathroomcnt), "nrow"))
+  
+# Part 3: Other data analysis
+
+# The most popular bathrooms (2 bathrooms, then 3 and 1)
+```{r}
+bath <-data.frame(ddply(temp16df, .(bathroomcnt), "nrow"))
 bath <- arrange(bath, desc(nrow))
-print(bath)
+head(bath)
 
 ggplot(bath) + geom_bar(aes(x= bathroomcnt, y=nrow), fill = "pink", stat = "identity") + xlab("Bath Room Number") + ylab("Frequency")+ scale_y_continuous(limits = c(0, 37000), breaks = seq(0, 37000, 1000)) + scale_x_continuous(limits = c(-0.5, 12), breaks = seq(-0.5, 12, 0.5)) + theme_bw()
 
 ```
 
 
+# The most popular bedrooms (3 bedrooms then 2 and 4)
 ```{r}
 
-bathE <-select(tempM2dfn, bathroomcnt, logerror)
-bathE1 <- ddply(bathE, .(bathroomcnt), "nrow")
-bathE2 <- ddply(bathE, ~bathroomcnt, summarise, logerror = mean(logerror))
-bathE <- merge(bathE1, bathE2, by = "bathroomcnt")
-
-ggplot(bathE) + geom_line(aes(x= bathroomcnt, y=nrow), color = "purple", size=1.5) + xlab("Bath Room Number and Logerror") + ylab("Frequency")+ scale_y_continuous(limits = c(0, 37000), breaks = seq(0, 37000, 2000)) + scale_x_continuous(limits = c(-0.5, 12), breaks = seq(-0.5, 12, 0.5)) + geom_line(aes(x= bathroomcnt, y=logerror*10^5), color = "brown", size =2) + theme_bw()
-
-```
-
-# explore bedroomcnt (out: During 2016, the most popular parcelid is with 3 bedrooms, then with 2 and 4 bedrooms)
-```{r}
-
-bed <-data.frame(ddply(tempM2dfn, .(bedroomcnt), "nrow"))
+bed <-data.frame(ddply(temp16df, .(bedroomcnt), "nrow"))
 bed <- arrange(bed, desc(nrow))
-print(bed)
+head(bed)
 
 ggplot(bed) + geom_bar(aes(x= bedroomcnt, y=nrow), fill = "pink", stat = "identity") + xlab("Bed Room Number") + ylab("Frequency")+ scale_y_continuous(limits = c(0, 36000), breaks = seq(0, 36000, 1000)) + scale_x_continuous(limits = c(-1, 15), breaks = seq(-1, 15, 1)) + theme_bw()
 
 ```
+
+
+# The most popular property type id (261 - Single Family Residential then 266 - Condominium) 
 ```{r}
-
-scatter.smooth(x=tempM2dfn$bedroomcnt/10^3, y=tempM2dfn$logerror, main="bedroomcnt ~ logerror") 
-
-```
-
-```{r}
-
-bedE <-select(tempM2dfn, bedroomcnt, logerror)
-bedE1 <- ddply(bedE, .(bedroomcnt), "nrow")
-bedE2 <- ddply(bedE, ~bedroomcnt, summarise, logerror = mean(logerror))
-bedE <- merge(bedE1, bedE2, by = "bedroomcnt")
-
-ggplot(bedE) + geom_line(aes(x= bedroomcnt, y=nrow), color = "purple", size=1.5) + xlab("Bed Room Number and Logerror") + ylab("Frequency")+ scale_y_continuous(limits = c(0, 36000), breaks = seq(0, 36000, 1000)) + scale_x_continuous(limits = c(-1, 15), breaks = seq(-1, 15,1)) + geom_line(aes(x= bedroomcnt, y=logerror*10^5), color = "brown", size =2) + theme_bw()
-
-```
-
-# explore propertylandusetypeid (out: the most popular property type id is 261 - Single Family Residential)
-# (then 266 - Condominium) 
-```{r}
-
-pt <-data.frame(ddply(tempM2dfn, .(propertylandusetypeid), "nrow"))
+pt <-data.frame(ddply(temp16df, .(propertylandusetypeid), "nrow"))
 pt <- arrange(pt, desc(nrow))
-print(pt)
-
+head(pt)
 ```
 
-# explore fips (out: the most popular property is located in 6037 - LA, then 6059 - OR, last 6111 - VE)
+# The most popular county (6037 - LA, then 6059 - OR, last 6111 - VE)
 ```{r}
 
-fips <-data.frame(ddply(tempM2dfn, .(fips), "nrow"))
+fips <-data.frame(ddply(temp16df, .(fips), "nrow"))
 fips <- arrange(fips, desc(nrow))
-print(fips)
+head(fips)
 
 ```
 
 
-# explore room number (out: the most popular property is with 0 room - maybe the value is not supplied, then with 6 rooms and 7 rooms)
+# The most popular room (0 room - maybe the value is not supplied, then with 6 rooms and 7 rooms)
 ```{r}
 
-room <-data.frame(ddply(tempM2dfn, .(roomcnt), "nrow"))
+room <-data.frame(ddply(temp16df, .(roomcnt), "nrow"))
 room <- arrange(room, desc(nrow))
-print(room)
+head(room)
 
 ```
 
 
-# Explore other features with data frequency between 58353 and 90275
-
-# explore taxvaluedollarcnt = landtaxvaluedollarcnt + structuretaxvaluedollarcnt
-#(out: tax value of the most popular property is between 300k and 500k)
-#(the minimum tax value is 22, the maximum tax value is 27,750k)
+# The most popular taxvaluedollarcnt (between 300k and 500k)
 
 ```{r}
 
-tax <-data.frame(ddply(mergeid, .(taxvaluedollarcnt), "nrow"))
+tax <-data.frame(ddply(mergeid16, .(taxvaluedollarcnt), "nrow"))
 tax <- arrange(tax, desc(nrow), desc(taxvaluedollarcnt))
 tax[which.max(tax$taxvaluedollarcnt),]
 tax[which.min(tax$taxvaluedollarcnt),]
-print(tax)
+head(tax)
 
 ```
 
-# Explore the calculatedfinishedsquarefeet (out:the most popular property is without squarefeet data)
-#(the second one is 1200sq.feet, the 3rd one is 1080sq.feet...)
-# (with the results of the plotting image, the popular property is with sqaurefeet around 1200sq.feet=112sq.meter)
-```{r}
+# The most popular squarefeet (around 1200sq.feet=112sq.meter)
 
-feet <-data.frame(ddply(mergeid, .(calculatedfinishedsquarefeet), "nrow"))
+```{r}
+feet <-data.frame(ddply(mergeid16, .(calculatedfinishedsquarefeet), "nrow"))
 feet <- arrange(feet, desc(nrow))
 feet[which.max(feet$calculatedfinishedsquarefeet),]
 feet[which.min(feet$calculatedfinishedsquarefeet),]
-print(feet)
+head(feet)
 plot(feet)
-
 ```
 
-# Explore yearbuilt (out: the most popular property is built in 1955)
-#(top 30: 1950 - 1989)
-# plot: popular wider range (1950 - 2007))
+# The most popular parcelid is built in 1955 (top 30: 1950 - 1989, wider range (1950 - 2007))
 ```{r}
 
-year <-data.frame(ddply(mergeid, .(yearbuilt), "nrow"))
+year <-data.frame(ddply(mergeid16, .(yearbuilt), "nrow"))
 year <- arrange(year, desc(nrow))
 
-print(year)
+head(year)
 
 ggplot(year) + geom_bar(aes(x= yearbuilt, y=nrow), fill = "pink", stat = "identity") + xlab("Year Built") + ylab("Frequency")+ scale_y_continuous(limits = c(0, 2000), breaks = seq(0, 2000, 100)) +scale_x_continuous(limits = c(1880, 2020), breaks = seq(0, 2020, 10)) + theme_bw()
-
-```
-
-
-```{r}
-
-yearB <-select(mergeid, yearbuilt, logerror)
-yearB1 <- ddply(yearB, .(yearbuilt), "nrow")
-yearB2 <- ddply(yearB, ~yearbuilt, summarise, logerror = mean(logerror))
-yearB <- merge(yearB1, yearB2, by = "yearbuilt")
-
-ggplot(yearB) + geom_line(aes(x= yearbuilt, y=nrow), color = "green", size=1.5) + xlab("Year Built and Logerror") + ylab("Frequency")+ scale_y_continuous(limits = c(0, 2000), breaks = seq(0, 2000, 100)) + scale_x_continuous(limits = c(1880, 2020), breaks = seq(1880, 2020, 10)) + geom_line(aes(x= yearbuilt, y=logerror*10^5), color = "red", size =1) + theme_bw()
 
 ```
 
@@ -498,679 +757,21 @@ ggplot(yearB) + geom_line(aes(x= yearbuilt, y=nrow), color = "green", size=1.5) 
 #(there are 125 parcelid were sold more than 2 times)
 ```{r}
 
-id <-data.frame(ddply(mergeid, .(parcelid), "nrow"))
+id <-data.frame(ddply(mergeid16, .(parcelid), "nrow"))
 id <- arrange(id, desc(nrow))
 
-print(id)
+head(id)
 plot(id)
 
 ```
 
 
-# finding the regular of logerror for the repeated parcelid (out: the difference between the one is about increasing 0.01 mostly, which is nearthe mean value of the total logerror )
 
-For normal house price prediction, the price normal is increased according to the time series, the increase of the average income in that zone, the profit between the last sold and current sold.
-```{r}
 
-a <- subset(mergeid, parcelid== "11842707" | parcelid=="10736972" |parcelid== "10790468"|parcelid=="10796614" |parcelid=="10798910"|parcelid=="10799924"|parcelid=="10815854"|parcelid=="10818076"|parcelid=="10821829"|parcelid=="10798910"|parcelid=="10858080"|parcelid=="10883535"|parcelid=="10911172"|parcelid=="10961914"|parcelid=="11005771"|parcelid=="11061551"|parcelid=="11105038"|parcelid=="11121105"|parcelid=="11121274"|parcelid=="11122560"|parcelid=="11135845")
-print(a)
 
-```
 
 
 
 
-#### try to use decision tree model to prediction the logeeror with 11 above explored useful features 
-#### divide the logerror into different 31 classes with interval 0.01 (range -0.15 --- +0.15  )
 
-
-```{r}
-p11 <- subset(mergeid, logerror < "-0.15" & logerror < "0") 
-#confirm the subset results
-p11[which.max(p11$logerror),]
-p11[which.min(p11$logerror),]
-
-p12 <- subset(mergeid, logerror == "0") 
-p13 <- subset(mergeid, logerror > "0" &logerror < "0.15") 
-p13[which.max(p13$logerror),]
-p13[which.min(p13$logerror),]
-
-p1 <- rbind(p11,p12,p13)
-p1[which.max(p1$logerror),]
-p1[which.min(p1$logerror),]
-
-p1 <- select(p1, parcelid, logerror, month, bathroomcnt, bedroomcnt, fips, latitude, longitude,  propertylandusetypeid, roomcnt, taxvaluedollarcnt, calculatedfinishedsquarefeet, yearbuilt)
-
-p1$taxvaluedollarcnt <- replace(p1$taxvaluedollarcnt, is.na(p1$taxvaluedollarcnt), 0)
-
-p1$calculatedfinishedsquarefeet <- replace(p1$calculatedfinishedsquarefeet, is.na(p1$calculatedfinishedsquarefeet), 0)
-
-p1$yearbuilt <- replace(p1$yearbuilt, is.na(p1$yearbuilt), 0)
-
-p2 <- data.frame(colSums(!is.na(p1)))
-names(p2)[1] <- c("values")
-
-print(p2)
-
-
-```
-We can learn that it is 90% logerror between the range -0.15 - +0.15
-
-
-# divide the logerror into their targeted classes and name it.
-
-
-
-p1$logerror <- replace(p1$logerror, p1$logerror <= "-0.14", 1)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.14" & p1$logerror <= "-0.13", 2)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.13" & p1$logerror <= "-0.12", 3)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.12" & p1$logerror <= "-0.11", 4)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.11" & p1$logerror <= "-0.10", 5)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.10" & p1$logerror <= "-0.09", 6)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.09" & p1$logerror <= "-0.08", 7)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.08" & p1$logerror <= "-0.07", 8)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.07" & p1$logerror <= "-0.06", 9)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.06" & p1$logerror <= "-0.05", 10)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.05" & p1$logerror <= "-0.04", 11)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.04" & p1$logerror <= "-0.03", 12)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.03" & p1$logerror <= "-0.02", 13)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.02" & p1$logerror <= "-0.01", 14)
-p1$logerror <- replace(p1$logerror, p1$logerror > "-0.01" & p1$logerror <= "0", 0)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0" & p1$logerror <= "0.01", 15)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.01" & p1$logerror <= "0.02", 16)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.02" & p1$logerror <= "0.03", 17)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.03" & p1$logerror <= "0.04", 18)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.04" & p1$logerror <= "0.05", 19)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.05" & p1$logerror <= "0.06", 20)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.06" & p1$logerror <= "0.07", 21)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.07" & p1$logerror <= "0.08", 22)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.08" & p1$logerror <= "0.09", 23)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.09" & p1$logerror <= "0.10", 24)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.10" & p1$logerror <= "0.11", 25)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.11" & p1$logerror <= "0.12", 26)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.12" & p1$logerror <= "0.13", 27)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.13" & p1$logerror <= "0.14", 28)
-p1$logerror <- replace(p1$logerror, p1$logerror > "0.14" & p1$logerror <= "0.15", 29)
-
-
-
-# build the prediction model
-## split the data into 90% of training and 10% of testing data
-
-```{r}
-
-p1_train <- subset(p1, month == "January" | month=="February"| month=="March" | month=="April"| month=="May"| month=="June" | month=="July"| month == "August"| month =="September") # 90% of total p1
-
-p1_test <- subset(p1, month == "October" | month=="November"| month=="December") # 10% of total p1
-
-```
-
-# clean the data, keep numeric data only @@@@@@@@@@@@@@@@@@@@@@ if needed , skip first
-
-
-p1_train <- select_if(p1_train,is.numeric)
-
-p1_test <- select_if(p1_test,is.numeric)
-
-
-
-```{r}
-
-colnames(p1_train)
-head(p1_train)
-head(p1_test)
-
-```
-
-# build formula
-```{r,fig.width=30, fig.height=12}
-
-formula <- logerror ~ parcelid + bathroomcnt + bedroomcnt + fips + latitude + longitude + propertylandusetypeid + roomcnt + taxvaluedollarcnt + calculatedfinishedsquarefeet + yearbuilt
-
-tree1 <- ctree(formula, data = p1_train)
-plot(tree1)
-
-
-
-```
-
-
-
-
-```{r}
-table(predict(tree1, newdata = p1_test),p1_test$logerror)
-#confusionMatrix(predict(tree1, newdata = p1_test),p1_test$logerror)
-
-```
-
-
-
-
-
-
-### Multiple Linear Regression
-
-https://www.tutorialspoint.com/r/r_multiple_regression.htm
-http://www.r-tutor.com/elementary-statistics/multiple-linear-regression/estimated-multiple-regression-equation
-http://r-statistics.co/Linear-Regression.html (ACCURACY)
-
-
-## TEST1 7:3 (10 variables)
-```{r}
-
-set.seed(100)
-test1 <- sample(1:nrow(p1), 0.7*nrow(p1))
-train1<- p1[test1,]
-test1 <- p1[-test1,]
-
-```
-
-```{r}
-
-model1_a = lm(logerror ~ bathroomcnt + bedroomcnt + fips + latitude + longitude + propertylandusetypeid + roomcnt + taxvaluedollarcnt + calculatedfinishedsquarefeet + yearbuilt, data = train1)
-
-summary(model1_a)
-
-```
-
-
-
-coeffs1 = coefficients(logerror.lm)[1]
-print(coeffs1)
-coebath = coefficients(logerror.lm)[2]
-coebed = coefficients(logerror.lm)[3]
-coefips = coefficients(logerror.lm)[4]
-coelat = coefficients(logerror.lm)[5]
-coelong = coefficients(logerror.lm)[6]
-coeprotype = coefficients(logerror.lm)[7]
-coeroom = coefficients(logerror.lm)[8]
-coetax = coefficients(logerror.lm)[9]
-coesqfeet = coefficients(logerror.lm)[10]
-coeyear = coefficients(logerror.lm)[11]
-
-
-```{r}
-
-pre1_a <- data.frame(predict(model1_a, test1)) 
-summary(pre1_a)
-plot(pre1_a)
-summary(test1$logerror)
-```
-```{r}
-
-mse(pre1_a,test1$logerror)
-```
-
-
-# Calculate prediction accuracy rates 
-
-
-## TEST 2 7:3 (8 variables, delete latitude & longitude)
-
-```{r}
-
-model1_b = lm(logerror ~ bathroomcnt + bedroomcnt + fips + propertylandusetypeid + roomcnt + taxvaluedollarcnt + calculatedfinishedsquarefeet + yearbuilt, data = train1)
-pre1_b <- data.frame(predict(model1_b, test1)) 
-pre1_bnold <- data.frame(cbind(origin=test1$logerror, pred=pre1_b))
-cor_accuracy1_b <- cor(pre1_bnold)
-print(cor_accuracy1_b) #10.4%
-mse(pre1_b,test1$logerror)
-
-```
-
-## TEST 3 7:3 (5 variables, delete bathroomcnt & bedroomcnt & roomcnt)
-```{r}
-
-model1_c = lm(logerror ~  fips + propertylandusetypeid + taxvaluedollarcnt + calculatedfinishedsquarefeet + yearbuilt, data = train1)
-pre1_c <- data.frame(predict(model1_c, test1)) 
-pre1_cnold <- data.frame(cbind(origin=test1$logerror, pred=pre1_c))
-cor_accuracy1_c <- cor(pre1_cnold)
-print(cor_accuracy1_c) #9.8%
-mse(pre1_c,test1$logerror)
-
-```
-
-```{r}
-
-model1_d = lm(logerror ~  fips , data = train1)
-pre1_d <- data.frame(predict(model1_d, test1)) 
-pre1_dnold <- data.frame(cbind(origin=test1$logerror, pred=pre1_d))
-cor_accuracy1_d <- cor(pre1_dnold)
-print(cor_accuracy1_d) 
-mse(pre1_d,test1$logerror)
-lm.beta(model1_d) # it is said online that cor value doesnot work for some regression variable but the stand cor
-
-
-```
-
-
-# After talking to Guido
-
-NO need to care about the varibales, just focus on the train16 data. Use the month and detail date as vaiable to find out if more data and provide a better prediction
-```{r}
-train16$transactiondate <- as.numeric(train16$transactiondate)
-
-train16$transactiondate <- gsub("[/]", "" , train16$transactiondate, perl=TRUE)
-
-is.numeric(train16$month)
-
-train16$month <- match(train16$month, month.name)
-
-mergeid$transactiondate <- gsub("[/]", "" , mergeid$transactiondate, perl=TRUE)
-mergeid$transactiondate <- as.numeric(mergeid$transactiondate)
-```
-
-Month by MOnth: Train= the 1st day of the month till the last but the 7 days left
-However, if there is no transaction during the last 7 days of the month, we need to explore the unuique date for each month to determine the range of the sample.
-
-
-```{r}
-
-jan <- subset(train16, month == "1")
-feb <- subset(train16, month == "2")
-mar <- subset(train16, month == "3")
-apr <- subset(train16, month == "4")
-may <- subset(train16, month == "5")
-jun <- subset(train16, month == "6")
-jul <- subset(train16, month == "7")
-aug <- subset(train16, month == "8")
-sep <- subset(train16, month == "9")
-oct <- subset(train16, month == "10")
-nov <- subset(train16, month=="11")
-dec <- subset(train16, month =="12")
-
-#   https://www.r-statistics.com/tag/aggregate/
-```
-
-
-
-```{r}
-(ddply(jan, .(transactiondate), "nrow"))
-train_jan <- subset(jan, transactiondate < "25012016")
-test_jan<- subset(jan, transactiondate >= "25012016")
-
-```
-
-```{r}
-
-model_jan = lm(logerror ~  transactiondate, data = train_jan)
-pre_jan <- data.frame(predict(model_jan, test_jan)) 
-
-mse(pre_jan,test_jan$logerror)
-
-```
-
-
-
-```{r}
-(ddply(feb, .(transactiondate), "nrow"))
-train_feb <- subset(feb, transactiondate < "23022016")
-test_feb<- subset(jan, transactiondate >= "23022016")
-
-```
-
-```{r}
-
-model_feb = lm(logerror ~  transactiondate, data = train_feb)
-pre_feb <- data.frame(predict(model_feb, test_feb)) 
-
-mse(pre_feb,test_feb$logerror)
-
-```
-
-
-```{r}
-
-jf <- rbind(jan,feb)
-train_jf <- subset(jf, transactiondate < "23022016")
-test_jf<- subset(jf, transactiondate >= "23022016")
-
-model_jf = lm(logerror ~  transactiondate, data = train_jf)
-pre_jf <- data.frame(predict(model_jf, test_jf)) 
-
-mse(pre_jf,test_jf$logerror) # predcit the whole feb 0.03293103
-
-
-```
-
-
-
-```{r}
-
-train_mar <- subset(mar, transactiondate < "25032016")
-test_mar<- subset(mar, transactiondate >= "25032016")
-model_mar = lm(logerror ~  transactiondate, data = train_mar)
-pre_mar <- data.frame(predict(model_mar, test_mar)) 
-
-mse(pre_mar,test_mar$logerror)
-
-```
-
-```{r}
-jfm<-rbind(jan,feb,mar)
-train_jfm <- subset(jfm, transactiondate < "25032016")
-test_jfm<- subset(jfm, transactiondate >= "25032016")
-model_jfm = lm(logerror ~  transactiondate, data = train_jfm)
-pre_jfm <- data.frame(predict(model_jfm, test_jfm)) 
-
-mse(pre_jfm,test_jfm$logerror) # predict the whole mar:0.02927437
-
-```
-
-```{r}
-
-train_apr <- subset(apr, transactiondate < "24042016")
-test_apr<- subset(apr, transactiondate >= "24042016")
-model_apr = lm(logerror ~  transactiondate, data = train_apr)
-pre_apr <- data.frame(predict(model_apr, test_apr)) 
-
-mse(pre_apr,test_apr$logerror)
-
-```
-
-```{r}
-jfma<-rbind(jan,feb,mar,apr)
-train_jfma <- subset(jfma, transactiondate < "24042016")
-test_jfma<- subset(jfma, transactiondate >= "24042016")
-model_jfma = lm(logerror ~  transactiondate, data = train_jfma)
-pre_jfma <- data.frame(predict(model_jfma, test_jfma)) 
-
-mse(pre_jfma,test_jfma$logerror) # value for predict the whole apr 0.03204248
-
-```
-
-```{r}
-
-train_may <- subset(may, transactiondate < "25052016")
-test_may<- subset(may, transactiondate >= "25052016")
-model_may = lm(logerror ~  transactiondate, data = train_may)
-pre_may <- data.frame(predict(model_may, test_may)) 
-
-mse(pre_may,test_may$logerror)
-
-```
-```{r}
-jfmam<-rbind(jan,feb,mar,apr,may)
-train_jfmam <- subset(jfmam, transactiondate < "25052016")
-test_jfmam<- subset(jfmam, transactiondate >= "25052016")
-model_jfmam = lm(logerror ~  transactiondate, data = train_jfmam)
-pre_jfmam <- data.frame(predict(model_jfmam, test_jfmam)) 
-
-mse(pre_jfmam,test_jfmam$logerror) # similar value if it predict the whole may 0.02939354
-
-```
-
-```{r}
-
-train_jun <- subset(jun, transactiondate < "24062016")
-test_jun<- subset(jun, transactiondate >= "24062016")
-model_jun = lm(logerror ~  transactiondate, data = train_jun)
-pre_jun <- data.frame(predict(model_jun, test_jun)) 
-
-mse(pre_jun,test_jun$logerror)
-
-```
-
-
-```{r}
-jfmamj<-rbind(jan,feb,mar,apr,may,jun)
-train_jfmamj <- subset(jfmamj, transactiondate < "24062016")
-test_jfmamj<- subset(jfmamj, transactiondate >= "24062016")
-model_jfmamj = lm(logerror ~  transactiondate, data = train_jfmamj)
-pre_jfmamj <- data.frame(predict(model_jfmamj, test_jfmamj)) 
-
-mse(pre_jfmamj,test_jfmamj$logerror) # the same vaule if it predict the whole jun 0.2823762
-
-```
-
-
-
-```{r}
-
-train_jul <- subset(jul, transactiondate < "25072016")
-test_jul<- subset(jul, transactiondate >= "25072016")
-model_jul = lm(logerror ~  transactiondate, data = train_jul)
-pre_jul <- data.frame(predict(model_jul, test_jul)) 
-
-mse(pre_jul,test_jul$logerror)
-
-```
-```{r}
-jfmamjj<-rbind(jan,feb,mar,apr,may,jun,jul)
-train_jfmamjj <- subset(jfmamjj, transactiondate < "25072016")
-test_jfmamjj<- subset(jfmamjj, transactiondate >= "25072016")
-model_jfmamjj = lm(logerror ~  transactiondate, data = train_jfmamjj)
-pre_jfmamjj <- data.frame(predict(model_jfmamjj, test_jfmamjj)) 
-
-mse(pre_jfmamjj,test_jfmamjj$logerror) # 0.02758651 if it predict the whole july
-
-```
-
-
-```{r}
-
-train_aug <- subset(aug, transactiondate < "25082016")
-test_aug<- subset(aug, transactiondate >= "25082016")
-model_aug = lm(logerror ~  transactiondate, data = train_aug)
-pre_aug <- data.frame(predict(model_aug, test_aug)) 
-
-mse(pre_aug,test_aug$logerror)
-
-```
-
-```{r}
-jfmamjja<-rbind(jan,feb,mar,apr,may,jun,jul,aug)
-train_jfmamjja <- subset(jfmamjja, transactiondate < "25082016")
-test_jfmamjja<- subset(jfmamjja, transactiondate >= "25082016")
-model_jfmamjja = lm(logerror ~  transactiondate, data = train_jfmamjja)
-pre_jfmamjja <- data.frame(predict(model_jfmamjja, test_jfmamjja)) 
-
-mse(pre_jfmamjja,test_jfmamjja$logerror) # 0.02664009 if it predict the whole aug
-
-```
-
-```{r}
-
-train_sep <- subset(sep, transactiondate < "24092016")
-test_sep<- subset(sep, transactiondate >= "24092016")
-model_sep = lm(logerror ~  transactiondate, data = train_sep)
-pre_sep <- data.frame(predict(model_sep, test_sep)) 
-
-mse(pre_sep,test_sep$logerror)
-
-```
-
-
-```{r}
-jfmamjjas<-rbind(jan,feb,mar,apr,may,jun,jul,aug,sep)
-train_jfmamjjas <- subset(jfmamjjas, transactiondate < "24092016")
-test_jfmamjjas<- subset(jfmamjjas, transactiondate >= "24092016")
-model_jfmamjjas = lm(logerror ~  transactiondate, data = train_jfmamjjas)
-pre_jfmamjjas <- data.frame(predict(model_jfmamjjas, test_jfmamjjas)) 
-
-mse(pre_jfmamjjas,test_jfmamjjas$logerror) # 0.02715848 if it predict the whole sep
-
-```
-
-```{r}
-
-train_oct <- subset(oct, transactiondate < "25102016")
-test_oct<- subset(oct, transactiondate >= "25102016")
-model_oct = lm(logerror ~  transactiondate, data = train_oct)
-pre_oct <- data.frame(predict(model_oct, test_oct)) 
-
-mse(pre_oct,test_oct$logerror)
-
-```
-
-```{r}
-jfmamjjaso<-rbind(jan,feb,mar,apr,may,jun,jul,aug,sep,oct)
-train_jfmamjjaso <- subset(jfmamjjaso, transactiondate < "25102016")
-test_jfmamjjaso<- subset(jfmamjjaso, transactiondate >= "25102016")
-model_jfmamjjaso = lm(logerror ~  transactiondate, data = train_jfmamjjaso)
-pre_jfmamjjaso <- data.frame(predict(model_jfmamjjaso, test_jfmamjjaso)) 
-
-mse(pre_jfmamjjaso,test_jfmamjjaso$logerror) # 0.02600165 if it predict the whole sep
-
-```
-
-
-```{r}
-
-train_nov <- subset(nov, transactiondate < "24112016")
-test_nov<- subset(nov, transactiondate >= "24112016")
-model_nov = lm(logerror ~  transactiondate, data = train_nov)
-pre_nov <- data.frame(predict(model_nov, test_nov)) 
-
-mse(pre_nov,test_nov$logerror)
-#(ddply(nov, .(transactiondate), "nrow")) # mse is lower than others, smaller size of transaction
-
-```
-
-```{r}
-jfmamjjason<-rbind(jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov)
-train_jfmamjjason <- subset(jfmamjjason, transactiondate < "24112016")
-test_jfmamjjason<- subset(jfmamjjason, transactiondate >= "24112016")
-model_jfmamjjason = lm(logerror ~  transactiondate, data = train_jfmamjjason)
-pre_jfmamjjason <- data.frame(predict(model_jfmamjjason, test_jfmamjjason)) 
-
-mse(pre_jfmamjjason,test_jfmamjjason$logerror) # 0.02573006 if it predict the whole nov
-
-```
-
-
-```{r}
-
-train_dec <- subset(dec, transactiondate < "24122016")
-test_dec<- subset(dec, transactiondate >= "24122016")
-model_dec = lm(logerror ~  transactiondate, data = train_dec)
-pre_dec <- data.frame(predict(model_dec, test_dec)) 
-
-mse(pre_dec,test_dec$logerror) # larger than others, but still smaller size of transaction
-
-
-```
-
-```{r}
-jfmamjjasond<-rbind(jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec)
-train_jfmamjjasond <- subset(jfmamjjasond, transactiondate < "24122016")
-test_jfmamjjasond<- subset(jfmamjjasond, transactiondate >= "24122016")
-model_jfmamjjasond = lm(logerror ~  transactiondate, data = train_jfmamjjasond)
-pre_jfmamjjasond <- data.frame(predict(model_jfmamjjasond, test_jfmamjjasond)) 
-
-mse(pre_jfmamjjasond,test_jfmamjjasond$logerror) # 0.02619549 if it predict the whole dec
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 1.4.4 Continue to narrow down tempM2dfn (seperate the parcelid in three counties: Los Angeles, Orange, Ventura)
-
-As indicated above, the accuracy of Zestimate depands on the available data about the property and its location. Separate the individual month and county for training practice.
-
-```{r}
-
-LA <- subset(tempM2df, fips == "6037") #Los Angeles County
-OR <- subset(tempM2df, fips == "6059") # Orange County
-VE <- subset(tempM2df, fips == "6111") #Ventura County
-
-```
-
-
-# 1.5 Analyse the data from three counties seperately
-
-# Los Angeles
-
-https://www.ffiec.gov/Census/report.aspx?year=2017&county=037&tract=1032.00&state=06&report=demographic   Middle Level Income
-https://www.ffiec.gov/census/report.aspx?year=2016&county=037&tract=8002.04&state=06&report=demographic   Upper level Income
-
-```{r}
-
-summarise(LA, Median=median(LA$logerror), Mean= mean(LA$logerror), Max=max(LA$logerror), Min=min(LA$logerror), Std=sd(LA$logerror)) 
-
-```
-
-
-```{r,fig.width=10, fig.height=7}
-tempLA1 <- ddply(LA, .(month), "nrow") 
-names(tempLA1)[2] <- c("transactioncount")
-tempLA1$month <- ordered(tempLA1$month, levels = c("December","November","October","September", "August", "July","June", "May", "April", "March",   "February","January" ))
-
-ggplot(tempLA1) + geom_bar(aes(x= month, y=transactioncount), fill = "pink", stat = "identity") + xlab("Months") + ylab("Transaction Counts of Properties in LA (2016)")+ scale_y_continuous(limits = c(0, 8000), breaks = seq(0, 8000, 800)) + geom_hline(yintercept = mean(tempLA1$transactioncount),linetype = "dashed", size = 2, color = "brown") + coord_flip() + theme_bw()
-```
-
-
-
-```{r,fig.width=10, fig.height=7}
-
-tempLA2 <- ddply(LA, c("month"), summarise, mean = mean(logerror))
-tempLA2$month <- ordered(tempLA2$month, levels = c("January", "February", "March","April","May", "June", "July","August","September",  "October","November", "December"))
-
-ggplot(tempLA2, aes(x=month, y=mean, group=2)) + geom_point(color="brown", size=5) + geom_line(color="brown", size=1.5) + xlab ("Month (2016)") + ylab("Logerror (Brown) and Transaction Counts (Purple)") + scale_y_continuous(limits = c(0, 0.02), breaks = seq(0, 0.2, 0.005)) + geom_line(aes(x=tempLA1$month,y=tempLA1$transactioncount/10^6), color = "purple", size = 1.5) +theme_bw()
-
-```
-
-```{r,fig.width=10, fig.height=7}
-tempLA3 <- merge(tempLA1, tempLA2, by = "month")
-cor(tempLA3$mean, tempLA3$transactioncount)
-
-```
-
-
-# OR
-
-```{r,fig.width=10, fig.height=7}
-summarise(OR, Median=median(OR$logerror), Mean= mean(OR$logerror), Max=max(OR$logerror), Min=min(OR$logerror), Std=sd(OR$logerror)) 
-```
-
-```{r,fig.width=10, fig.height=7}
-tempOR1 <- ddply(OR, .(month), "nrow") 
-names(tempOR1)[2] <- c("transactioncount")
-tempOR1$month <- ordered(tempOR1$month, levels = c("December","November","October","September", "August", "July","June", "May", "April", "March",   "February","January" ))
-
-ggplot(tempOR1) + geom_bar(aes(x= month, y=transactioncount), fill = "pink", stat = "identity") + xlab("Months") + ylab("Transaction Counts of Properties in OR (2016)")+ scale_y_continuous(limits = c(0, 4000), breaks = seq(0, 4000, 400)) + geom_hline(yintercept = mean(tempOR1$transactioncount),linetype = "dashed", size = 2, color = "brown") + coord_flip() + theme_bw()
-```
-
-
-
-```{r}
-oct16 <- subset(mergeid, month == "October", select = -transactiondate)
-nov16 <- subset(mergeid, month== "November", select = -transactiondate)
-dec16 <- subset(mergeid, month =="December", select = -transactiondate)
-
-#   https://www.r-statistics.com/tag/aggregate/
-```
-
-
-
-```{r,fig.width=10, fig.height=7}
-
-CA <- get_map(location = "LA", zoom = 10, scale = "auto", color = "color", maptype = c("terrain"))
-ggmap(CA)
-
-```
 
