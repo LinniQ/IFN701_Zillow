@@ -43,13 +43,13 @@ eg.
 library(lubridate)
 library(ggplot2)
 library(plyr)
-#install.packages("dplyr")
+install.packages("dplyr")
 library(dplyr)
 
-#install.packages("corrplot")
+install.packages("corrplot")
 library(corrplot)
 
-#install.packages("Metrics")
+install.packages("Metrics")
 library(Metrics)
 
 ```
@@ -74,6 +74,8 @@ all(colnames(prop16)==colnames(prop17))
 ```{r}
 # the total number of the parcelid looks the same but check any difference between the parcelid of 2017 and 2016
 all(unique(prop16$parcelid)== unique(prop17$parcelid))
+head(prop16)
+head(prop17)
 ```
 
 There are the same physical features for the properties of both 2016 and 2017, but there exist some differences among the parcelids.
@@ -654,12 +656,64 @@ head(pre17_oct)
 ```
 As the mean of logerror of 2017 from Jan to Setp is 0.01675494 that means the overestimatioin is nearly 1.7%. To predict 3millions of parcelid in Nov and Dec, I will use the following ways to reduce the gap between the future actual logerror.
 ```{r}
-pre17_nov <- pre17_oct[1] * (1-1.7/100)
-pre17_dec <- pre17_nov[1] * (1-1.7/100)
+pre17_nov <- pre17_oct[1] * (1-1.7/5)
+pre17_dec <- pre17_nov[1] * (1-1.7/5)
 head(pre17_nov)
 head(pre17_dec)
+parcelid17 <- select(prop17, parcelid)
+pre17<- cbind(pre17_oct,pre17_nov,pre17_oct)
+
+pre17<- cbind(parcelid17,pre17_oct,pre17_nov,pre17_oct)
 
 ```
+
+# 2.3 Applying the model and the way to select the training dataset into the prediction of 2016
+
+
+```{r}
+mergeid16 <- replace(mergeid16, is.na(mergeid16), 0)
+prop16 <- replace(prop16, is.na(prop16),0)
+pre16 <- select(mergeid16, parcelid,logerror, transactiondate,month, bathroomcnt,bedroomcnt,calculatedfinishedsquarefeet,fips,latitude, longitude,lotsizesquarefeet,propertylandusetypeid,rawcensustractandblock,regionidcity,regionidzip,roomcnt,yearbuilt, taxvaluedollarcnt,taxamount,censustractandblock)
+
+traindata16 <- subset(pre16, pre16$month > 6) # use the data of July, Aug and Sept to be training data
+model16_jas = lm(logerror ~ bathroomcnt+bedroomcnt+calculatedfinishedsquarefeet+fips+latitude+ longitude+lotsizesquarefeet+propertylandusetypeid+rawcensustractandblock+regionidcity+regionidzip+roomcnt+yearbuilt+ taxvaluedollarcnt+taxamount+ censustractandblock, data = traindata16)
+pre16_oct <- data.frame(predict(model16_jas, prop16))# predict logerror for 3millions parcelid
+nrow(pre16_oct)
+head(pre16_oct)
+
+```
+
+
+
+```{r}
+
+pre16_nov <- pre16_oct[1] *(1-1.1/5)
+pre16_dec <- pre16_nov[1] *(1-1.1/5)
+head(pre16_nov)
+head(pre16_dec)
+parcelid16 <- select(prop16, parcelid)
+pre16 <- cbind(pre16_oct,pre16_nov,pre16_dec)
+
+pre16 <- cbind(parcelid16,pre16_oct,pre16_nov,pre16_dec)
+
+```
+
+
+
+```{r}
+#all(pre16$parcelid== pre17$parcelid)
+
+preAll <- merge(x=pre16,y=pre17,by="parcelid")
+names(preAll)<-c("parcelid", "201610", "201611", "201612","201710","201711","201712")
+
+
+write.csv(preAll, file="ZillowLogerror_LinniQ_5.csv", row.names = FALSE)
+
+```
+
+
+
+
 
 
 
